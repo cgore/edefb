@@ -36,11 +36,16 @@
   (:use :common-lisp)
   (:import-from :edefb/flight
                 :pad-class
+                :rank-name
                 :read-report
                 :read-ship
                 :report-body
+                :report-commander
                 :report-destination
+                :report-in-ship?
                 :report-name
+                :report-on-foot?
+                :report-rank
                 :report-situation
                 :report-station
                 :report-system
@@ -51,11 +56,16 @@
   (:import-from :edefb/bag
                 :show-ship)
   (:export :pad-class
+           :rank-name
            :read-report
            :read-ship
            :report-body
+           :report-commander
            :report-destination
+           :report-in-ship?
            :report-name
+           :report-on-foot?
+           :report-rank
            :report-situation
            :report-station
            :report-system

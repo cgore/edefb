@@ -37,23 +37,49 @@
         :sigma/behave)
   (:import-from :com.inuoe.jzon
                 :parse)
-  (:export :make-report
+  (:export :make-ranks
+           :make-report
            :make-ship
            :pad-class
+           :rank-name
            :read-report
            :read-ship
            :report
+           :report-altitude
            :report-balance
            :report-body
+           :report-breathable
            :report-cargo
+           :report-cargo-capacity
+           :report-commander
            :report-destination
            :report-fuel-capacity
            :report-fuel-main
+           :report-gravity
+           :report-heading
+           :report-health
+           :report-hull
+           :report-ident
+           :report-in-ship?
+           :report-jump-range
+           :report-latitude
+           :report-legal
+           :report-longitude
            :report-name
+           :report-on-foot?
+           :report-oxygen
+           :report-pips
+           :report-rank
+           :report-rebuy
+           :report-shields
            :report-situation
            :report-station
+           :report-suit
            :report-system
+           :report-temperature
+           :report-timestamp
            :report-type
+           :report-weapon
            :saved-games-directory
            :ship
            :ship-from-events
@@ -67,12 +93,35 @@ TYPE is the ship type."
   name
   type)
 
+(defstruct ranks
+  "The rank integers from a Rank event.
+NIL means that ladder has not been seen.  COMBAT, TRADE, EXPLORE,
+EXOBIOLOGIST, SOLDIER, and CQC are the pilot ladders.  FEDERATION and
+EMPIRE are the naval ladders."
+  combat
+  trade
+  explore
+  exobiologist
+  soldier
+  cqc
+  federation
+  empire)
+
 (defstruct report
-  "A live picture of the flight.
-NAME and TYPE name the ship.  SYSTEM, STATION, and BODY say where it
-is.  SITUATION is the cockpit state, such as Docked or Supercruise.
-FUEL-MAIN and FUEL-CAPACITY are tons.  CARGO is tons.  BALANCE is
-credits.  DESTINATION is the selected navigation target."
+  "A live picture of the commander and the current vehicle.
+NAME, TYPE, and IDENT name the ship.  SYSTEM, STATION, and BODY say
+where the commander is.  SITUATION is the cockpit state, such as
+Docked or Supercruise.  LATITUDE, LONGITUDE, HEADING, and ALTITUDE
+are set near a planet.  FUEL-MAIN and FUEL-CAPACITY are tons.  CARGO
+and CARGO-CAPACITY are tons.  BALANCE is credits.  DESTINATION is the
+selected navigation target.  COMMANDER is the commander name.  RANKS
+are the journal rank integers.  HULL is the hull fraction from the
+last Loadout or HullDamage.  SHIELDS is :UP or :DOWN.  PIPS is the
+SYS, ENG, and WEP distribution in half-pips.  JUMP-RANGE is light
+years.  REBUY is credits.  LEGAL is the legal state.  TIMESTAMP is
+the UTC time the game wrote.  SUIT, HEALTH, OXYGEN, GRAVITY,
+TEMPERATURE, and WEAPON describe the commander on foot.  BREATHABLE
+is :YES or :NO."
   name
   type
   system
@@ -83,7 +132,111 @@ credits.  DESTINATION is the selected navigation target."
   fuel-capacity
   cargo
   balance
-  destination)
+  destination
+  commander
+  ranks
+  ident
+  latitude
+  longitude
+  heading
+  altitude
+  cargo-capacity
+  hull
+  shields
+  pips
+  jump-range
+  rebuy
+  legal
+  timestamp
+  suit
+  health
+  oxygen
+  gravity
+  temperature
+  weapon
+  breathable)
+
+(defparameter *rank-names*
+  '((:combat
+     "Harmless" "Mostly Harmless" "Novice" "Competent" "Expert"
+     "Master" "Dangerous" "Deadly" "Elite")
+    (:trade
+     "Penniless" "Mostly Penniless" "Peddler" "Dealer" "Merchant"
+     "Broker" "Entrepreneur" "Tycoon" "Elite")
+    (:explore
+     "Aimless" "Mostly Aimless" "Scout" "Surveyor" "Explorer"
+     "Pathfinder" "Ranger" "Pioneer" "Elite")
+    (:cqc
+     "Helpless" "Mostly Helpless" "Amateur" "Semi Professional"
+     "Professional" "Champion" "Hero" "Legend" "Elite")
+    (:soldier
+     "Defenceless" "Mostly Defenceless" "Rookie" "Soldier"
+     "Gunslinger" "Warrior" "Gladiator" "Deadeye" "Elite")
+    (:exobiologist
+     "Directionless" "Mostly Directionless" "Compiler" "Collector"
+     "Cataloguer" "Taxonomist" "Ecologist" "Geneticist" "Elite")
+    (:federation
+     "None" "Recruit" "Cadet" "Midshipman" "Petty Officer"
+     "Chief Petty Officer" "Warrant Officer" "Ensign" "Lieutenant"
+     "Lt. Commander" "Post Commander" "Post Captain" "Rear Admiral"
+     "Vice Admiral" "Admiral")
+    (:empire
+     "None" "Outsider" "Serf" "Master" "Squire" "Knight" "Lord"
+     "Baron" "Viscount" "Count" "Earl" "Marquis" "Duke" "Prince"
+     "King"))
+  "Rank names by ladder, index zero first.
+The six pilot ladders continue past Elite as Elite I through Elite V.
+Federation stops at Admiral and Empire stops at King.")
+
+(defparameter *pilot-ladders*
+  '(:combat :trade :explore :cqc :soldier :exobiologist)
+  "Ladders that continue Elite I through Elite V.")
+
+(defun rank-name (ladder index)
+  "Return the rank name for LADDER at INDEX.
+INDEX is the integer the journal writes.  An index with no name is
+shown as its digits.  NIL means the rank has not been seen."
+  (when (integerp index)
+    (let ((names (rest (assoc ladder *rank-names*))))
+      (cond
+        ((and names (<= 0 index (1- (length names))))
+         (nth index names))
+        ((and (member ladder *pilot-ladders*) (<= 9 index 13))
+         (format nil "Elite ~@R" (- index 8)))
+        (t
+         (format nil "~D" index))))))
+
+(behavior 'rank-name
+  (should-equal "Harmless" (rank-name :combat 0))
+  (should-equal "Mostly Penniless" (rank-name :trade 1))
+  (should-equal "Explorer" (rank-name :explore 4))
+  (should-equal "Semi Professional" (rank-name :cqc 3))
+  (should-equal "Elite" (rank-name :soldier 8))
+  (should-equal "Elite I" (rank-name :explore 9))
+  (should-equal "Elite V" (rank-name :exobiologist 13))
+  (should-equal "14" (rank-name :combat 14))
+  (should-equal "Lt. Commander" (rank-name :federation 9))
+  (should-equal "Admiral" (rank-name :federation 14))
+  (should-equal "15" (rank-name :federation 15))
+  (should-equal "King" (rank-name :empire 14))
+  (should-equal "Defenceless" (rank-name :soldier 0))
+  (should-equal "Directionless" (rank-name :exobiologist 0))
+  (should-be-null (rank-name :combat nil))
+  (should-equal "-1" (rank-name :trade -1)))
+
+(defun report-rank (report ladder)
+  "Return REPORT's integer rank on LADDER, or NIL."
+  (let ((ranks (and report (report-ranks report))))
+    (when ranks
+      (ecase ladder
+        (:combat (ranks-combat ranks))
+        (:trade (ranks-trade ranks))
+        (:explore (ranks-explore ranks))
+        (:exobiologist (ranks-exobiologist ranks))
+        (:soldier (ranks-soldier ranks))
+        (:cqc (ranks-cqc ranks))
+        (:federation (ranks-federation ranks))
+        (:empire (ranks-empire ranks))))))
 
 (defparameter *pad-classes*
   '(("Small"
@@ -307,17 +460,144 @@ EVENTS are JSON objects from one journal, oldest first."
   (should-be-null (situation-from-flags nil nil))
   (should-equal "Docked" (situation-from-flags (logior 1 16) 0)))
 
+(defun report-on-foot? (report)
+  "Return true when REPORT says the commander is on foot."
+  (and report
+       (stringp (report-situation report))
+       (string-equal (report-situation report) "On foot")))
+
+(defun report-in-ship? (report)
+  "Return true when REPORT says the commander is in a ship.
+On foot, in a taxi, and in an SRV are not a ship.  A fighter and
+multicrew still are.  With no status yet, a ship the journal named
+counts as being aboard."
+  (when report
+    (let ((situation (report-situation report)))
+      (cond
+        ((null situation)
+         (or (text-value (report-name report))
+             (text-value (report-type report))))
+        ((member situation '("On foot" "Taxi" "SRV") :test #'string-equal)
+         nil)
+        (t t)))))
+
+(behavior 'report-in-ship?
+  (should-be-true (report-in-ship? (make-report :situation "Docked")))
+  (should-be-true (report-in-ship? (make-report :situation "In space")))
+  (should-be-true (report-in-ship? (make-report :situation "Fighter")))
+  (should-be-true (report-in-ship? (make-report :situation "Multicrew")))
+  (should-be-true (report-in-ship? (make-report :name "Kipling's Ghost")))
+  (should-be-false (report-in-ship? (make-report)))
+  (should-be-false (report-in-ship?
+                    (make-report :situation "On foot" :name "Parked")))
+  (should-be-false (report-in-ship? (make-report :situation "SRV")))
+  (should-be-false (report-in-ship? (make-report :situation "Taxi")))
+  (should-be-true (report-on-foot? (make-report :situation "On foot")))
+  (should-be-false (report-on-foot? (make-report :situation "Docked")))
+  (should-be-false (report-on-foot? nil))
+  (should-be-false (report-in-ship? nil)))
+
+(defun note-number (report event key writer)
+  "Copy a numeric field KEY of EVENT onto REPORT through WRITER."
+  (let ((value (gethash key event)))
+    (when (numberp value)
+      (funcall writer value report)))
+  report)
+
+(defun note-fuel-capacity (report event)
+  "Copy the main tank size from EVENT onto REPORT.
+LoadGame writes a number.  Loadout writes Main and Reserve."
+  (let ((capacity (gethash "FuelCapacity" event)))
+    (cond
+      ((numberp capacity)
+       (setf (report-fuel-capacity report) capacity))
+      ((hash-table-p capacity)
+       (note-number report capacity "Main"
+                    #'(setf report-fuel-capacity)))))
+  report)
+
+(defun note-timestamp (report event)
+  "Copy EVENT's UTC timestamp onto REPORT."
+  (let ((stamp (text-value (gethash "timestamp" event))))
+    (when stamp
+      (setf (report-timestamp report) stamp)))
+  report)
+
+(defun note-ranks (report event)
+  "Copy the rank integers present on EVENT onto REPORT.
+A missing key leaves the previous rank in place."
+  (let ((ranks (or (report-ranks report)
+                   (setf (report-ranks report) (make-ranks)))))
+    (flet ((take (key writer)
+             (let ((value (gethash key event)))
+               (when (integerp value)
+                 (funcall writer value ranks)))))
+      (take "Combat" #'(setf ranks-combat))
+      (take "Trade" #'(setf ranks-trade))
+      (take "Explore" #'(setf ranks-explore))
+      (take "Exobiologist" #'(setf ranks-exobiologist))
+      (take "Soldier" #'(setf ranks-soldier))
+      (take "CQC" #'(setf ranks-cqc))
+      (take "Federation" #'(setf ranks-federation))
+      (take "Empire" #'(setf ranks-empire))))
+  report)
+
+(defun suit-model (name)
+  "Return the suit model NAME names, or NIL."
+  (when (stringp name)
+    (cond
+      ((search "flight" name :test #'char-equal) "Flight Suit")
+      ((search "utility" name :test #'char-equal) "Maverick Suit")
+      ((search "tactical" name :test #'char-equal) "Dominator Suit")
+      ((search "exploration" name :test #'char-equal) "Artemis Suit"))))
+
+(behavior 'suit-model
+  (should-equal "Flight Suit" (suit-model "flightsuit"))
+  (should-equal "Maverick Suit" (suit-model "utilitysuit_class3"))
+  (should-equal "Dominator Suit" (suit-model "tacticalsuit_class5"))
+  (should-equal "Artemis Suit" (suit-model "explorationsuit_class2"))
+  (should-be-null (suit-model "wpn_m_sniper")))
+
+(defun note-suit (report event)
+  "Copy the suit model from EVENT onto REPORT."
+  (let ((model (or (suit-model (gethash "SuitName" event))
+                   (text-value (gethash "SuitName_Localised" event))
+                   (text-value (gethash "SuitName" event))
+                   (text-value (gethash "LoadoutName" event)))))
+    (when model
+      (setf (report-suit report) model)))
+  report)
+
+(defun number-list (value length)
+  "Return VALUE as a list of LENGTH numbers, or NIL."
+  (when (and (or (vectorp value) (listp value))
+             (= (length value) length)
+             (every #'numberp value))
+    (coerce value 'list)))
+
 (defun note-report-event (report event)
-  "Copy ship, place, and fuel capacity from EVENT onto REPORT."
+  "Copy commander, ship, place, and suit facts from EVENT onto REPORT."
+  (note-timestamp report event)
   (cond
     ((event-one-of? event '("LoadGame" "Loadout"))
      (setf (report-name report)
            (assign-text (report-name report) (gethash "ShipName" event))
            (report-type report)
-           (assign-text (report-type report) (gethash "Ship" event)))
-     (let ((capacity (gethash "FuelCapacity" event)))
-       (when (numberp capacity)
-         (setf (report-fuel-capacity report) capacity))))
+           (assign-text (report-type report) (gethash "Ship" event))
+           (report-ident report)
+           (assign-text (report-ident report) (gethash "ShipIdent" event)))
+     (note-fuel-capacity report event)
+     (note-number report event "CargoCapacity"
+                  #'(setf report-cargo-capacity))
+     (note-number report event "HullHealth" #'(setf report-hull))
+     (note-number report event "MaxJumpRange" #'(setf report-jump-range))
+     (note-number report event "Rebuy" #'(setf report-rebuy))
+     (when (event-named? event "LoadGame")
+       (setf (report-commander report)
+             (assign-text (report-commander report)
+                          (gethash "Commander" event)))
+       (note-number report event "Credits" #'(setf report-balance))
+       (note-number report event "FuelLevel" #'(setf report-fuel-main))))
     ((event-named? event "Location")
      (setf (report-system report)
            (assign-text (report-system report) (gethash "StarSystem" event))
@@ -342,7 +622,24 @@ EVENTS are JSON objects from one journal, oldest first."
      (setf (report-body report)
            (assign-text (report-body report) (gethash "Body" event))))
     ((event-named? event "LeaveBody")
-     (setf (report-body report) nil)))
+     (setf (report-body report) nil))
+    ((event-named? event "Commander")
+     (setf (report-commander report)
+           (assign-text (report-commander report) (gethash "Name" event))))
+    ((event-named? event "Rank")
+     (note-ranks report event))
+    ((event-named? event "HullDamage")
+     (let ((health (gethash "Health" event)))
+       (when (and (numberp health)
+                  (not (eq t (gethash "Fighter" event))))
+         (setf (report-hull report) health))))
+    ((event-named? event "ShieldState")
+     (multiple-value-bind (up present) (gethash "ShieldsUp" event)
+       (when present
+         (setf (report-shields report) (if up :up :down)))))
+    ((event-one-of? event '("SuitLoadout" "SwitchSuitLoadout"
+                            "CreateSuitLoadout"))
+     (note-suit report event)))
   report)
 
 (defun report-from-events (events)
@@ -367,6 +664,38 @@ EVENTS are JSON objects from one journal, oldest first."
     (should-equal "Alpha Centauri" (report-system report))
     (should-equal "Hutton Orbital" (report-station report))
     (should-be-null (report-body report))))
+
+(behavior 'report-commander
+  (let ((report (report-from-events
+                 (list (parse "{\"event\":\"Commander\",\"Name\":\"HRC1\"}")
+                       (parse "{\"timestamp\":\"2026-10-21T01:00:00Z\",\"event\":\"LoadGame\",\"Commander\":\"hrc1\",\"Credits\":2500,\"Ship\":\"Mandalay\",\"ShipName\":\"Kipling's Ghost\",\"ShipIdent\":\"KG-07\",\"FuelCapacity\":32,\"FuelLevel\":10}")
+                       (parse "{\"event\":\"Rank\",\"Combat\":5,\"Trade\":1,\"Explore\":9,\"Empire\":14,\"Federation\":9,\"CQC\":3,\"Soldier\":0,\"Exobiologist\":13}")
+                       (parse "{\"event\":\"Rank\",\"Combat\":4}")
+                       (parse "{\"event\":\"Loadout\",\"Ship\":\"mandalay\",\"CargoCapacity\":8,\"HullHealth\":0.8,\"MaxJumpRange\":72.5,\"Rebuy\":1000,\"FuelCapacity\":{\"Main\":48,\"Reserve\":0.5},\"ShipIdent\":\"KG-07\"}")
+                       (parse "{\"event\":\"HullDamage\",\"Health\":0.2,\"Fighter\":true}")
+                       (parse "{\"event\":\"HullDamage\",\"Health\":0.6,\"Fighter\":false}")
+                       (parse "{\"event\":\"ShieldState\",\"ShieldsUp\":true}")
+                       (parse "{\"event\":\"SuitLoadout\",\"SuitName\":\"explorationsuit_class2\",\"LoadoutName\":\"Field\"}")))))
+    (should-equal "HRC1" (report-commander report))
+    (should= 2500 (report-balance report))
+    (should-equal "KG-07" (report-ident report))
+    (should= 10 (report-fuel-main report))
+    (should= 48 (report-fuel-capacity report))
+    (should= 8 (report-cargo-capacity report))
+    (should= 0.6d0 (report-hull report))
+    (should-eq :up (report-shields report))
+    (should= 72.5 (report-jump-range report))
+    (should= 1000 (report-rebuy report))
+    (should-equal "2026-10-21T01:00:00Z" (report-timestamp report))
+    (should= 4 (report-rank report :combat))
+    (should= 1 (report-rank report :trade))
+    (should= 9 (report-rank report :explore))
+    (should= 14 (report-rank report :empire))
+    (should= 9 (report-rank report :federation))
+    (should= 3 (report-rank report :cqc))
+    (should= 0 (report-rank report :soldier))
+    (should= 13 (report-rank report :exobiologist))
+    (should-equal "Artemis Suit" (report-suit report))))
 
 (defun events-from-lines (lines)
   "Return the JSON objects in LINES.
@@ -441,6 +770,12 @@ NIL when the file is missing or not finished JSON."
       (status-flag? flags2 13)
       (status-flag? flags2 14)))
 
+(defun status-number (status key)
+  "Return the number KEY of STATUS, or NIL."
+  (let ((value (gethash key status)))
+    (when (numberp value)
+      value)))
+
 (defun apply-status (report status)
   "Copy the live cockpit fields of STATUS onto REPORT.
 STATUS nil leaves REPORT's journal fields in place.  A status that is
@@ -464,7 +799,34 @@ not docked clears a station the journal still names."
       (setf (report-situation report) (situation-from-flags flags flags2))
       (setf (report-destination report)
             (when (hash-table-p destination)
-              (text-value (gethash "Name" destination))))))
+              (text-value (gethash "Name" destination))))
+      (note-timestamp report status)
+      (when (integerp flags)
+        (setf (report-shields report)
+              (if (status-flag? flags 3) :up :down)))
+      (setf (report-pips report) (number-list (gethash "Pips" status) 3))
+      (setf (report-legal report) (text-value (gethash "LegalState" status)))
+      (setf (report-latitude report) (status-number status "Latitude")
+            (report-longitude report) (status-number status "Longitude")
+            (report-heading report) (status-number status "Heading")
+            (report-altitude report) (status-number status "Altitude"))
+      (if (status-flag? flags2 0)
+          (setf (report-health report) (status-number status "Health")
+                (report-oxygen report) (status-number status "Oxygen")
+                (report-gravity report) (status-number status "Gravity")
+                (report-temperature report)
+                (status-number status "Temperature")
+                (report-weapon report)
+                (or (text-value (gethash "SelectedWeapon_Localised" status))
+                    (text-value (gethash "SelectedWeapon" status)))
+                (report-breathable report)
+                (if (status-flag? flags2 16) :yes :no))
+          (setf (report-health report) nil
+                (report-oxygen report) nil
+                (report-gravity report) nil
+                (report-temperature report) nil
+                (report-weapon report) nil
+                (report-breathable report) nil))))
   report)
 
 (behavior 'apply-status
@@ -478,7 +840,40 @@ not docked clears a station the journal still names."
     (should-equal "Hutton Orbital" (report-destination report))
     (should-be-null (report-station report))
     (should-be-null (report-body report))
-    (should-equal "Sol" (report-system report)))
+    (should-equal "Sol" (report-system report))
+    (should-eq :down (report-shields report))
+    (should-be-null (report-pips report))
+    (should-be-null (report-health report)))
+  (let ((report (make-report :balance 5 :hull 1 :shields :up
+                             :oxygen 1 :suit "Flight Suit")))
+    (apply-status report
+                  (parse "{\"timestamp\":\"2026-10-21T01:15:10Z\",\"Flags\":16777224,\"Flags2\":0,\"Pips\":[4,8,0],\"LegalState\":\"Clean\",\"Balance\":9,\"Latitude\":1.5,\"Longitude\":-2,\"Heading\":90,\"Altitude\":404}"))
+    (should-eq :up (report-shields report))
+    (should-equal "In space" (report-situation report))
+    (should-equal '(4 8 0) (report-pips report))
+    (should-equal "Clean" (report-legal report))
+    (should= 1.5 (report-latitude report))
+    (should= -2 (report-longitude report))
+    (should= 90 (report-heading report))
+    (should= 404 (report-altitude report))
+    (should-equal "2026-10-21T01:15:10Z" (report-timestamp report))
+    (should= 9 (report-balance report))
+    (should= 1 (report-hull report))
+    (should-be-null (report-oxygen report))
+    (should-be-true (report-in-ship? report)))
+  (let ((report (make-report :name "Parked" :type "Mandalay")))
+    (apply-status report
+                  (parse "{\"Flags\":0,\"Flags2\":65537,\"Oxygen\":0.5,\"Health\":0.25,\"Temperature\":290,\"Gravity\":0.12,\"SelectedWeapon_Localised\":\"Karma P-15\",\"LegalState\":\"Wanted\"}"))
+    (should-equal "On foot" (report-situation report))
+    (should-be-true (report-on-foot? report))
+    (should-be-false (report-in-ship? report))
+    (should= 0.5 (report-oxygen report))
+    (should= 0.25 (report-health report))
+    (should= 290 (report-temperature report))
+    (should= 0.12d0 (report-gravity report))
+    (should-equal "Karma P-15" (report-weapon report))
+    (should-eq :yes (report-breathable report))
+    (should-equal "Wanted" (report-legal report)))
   (let ((report (make-report :station "Galileo")))
     (apply-status report
                   (parse "{\"Flags\":1,\"BodyName\":\"Earth\"}"))

@@ -4,12 +4,15 @@ EDEFB is the Elite Dangerous Electronic Flight Bag.  It is a Common Lisp
 companion for the game.  It reads the live player journal and the snapshot
 files written beside it, and keeps the picture of the ship you are flying.
 
-The window is a live report.  It shows the ship name, the ship type,
-and the landing pad class, then the current system, station, and body,
-and the fuel, cargo, and credits from the cockpit status.  The report
-uses Euro Caps when Elite Dangerous Market Connector has installed that
-font, in the orange on black of a ship cockpit display.  It keeps
-reading those files while the window is open.
+The window is a live report.  Along the top are the current position
+and the game date and time.  The left cluster is the commander: the
+name, the ranks, the legal state, and the credits.  The next cluster
+is the ship when the commander is aboard, including the hull, whether
+the shields are up, the power distribution, the fuel, and the cargo
+used, free, and total.  On foot, that cluster switches to the suit.
+The report uses Euro Caps when Elite Dangerous Market Connector has
+installed that font, in the orange on black of a ship cockpit display.
+It keeps reading those files while the window is open.
 
 Those files live under
 `Saved Games\Frontier Developments\Elite Dangerous`: the NDJSON journal,
