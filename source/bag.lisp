@@ -43,40 +43,19 @@
            :show-ship))
 (in-package :edefb/bag)
 
-(defun euro-caps-file ()
-  "Return EDMC's Euro Caps font file, or NIL when it is not installed."
-  (let ((local (uiop:getenv "LOCALAPPDATA")))
-    (dolist (directory (list #p"C:/Program Files (x86)/EDMarketConnector/"
-                             #p"C:/Program Files/EDMarketConnector/"
-                             (when (and (stringp local) (plusp (length local)))
-                               (merge-pathnames
-                                #p"EDMarketConnector/"
-                                (pathname (concatenate 'string
-                                                       (substitute #\/ #\\ local)
-                                                       "/"))))))
-      (when directory
-        (let ((file (probe-file (merge-pathnames #p"EUROCAPS.TTF" directory))))
-          (when file
-            (return file)))))))
-
 (defvar *report-text-style* nil
   "The text style of the live report, cached after the first lookup.")
 
 (defun report-text-style ()
   "Return the text style used by the live report.
-Euro Caps is the face EDMC ships.  When that file is not on this
-machine, the style is the default sans serif."
+The face is the standard sans serif at 12pt roman."
   (or *report-text-style*
       (setf *report-text-style*
-            (let ((file (euro-caps-file)))
-              (if (and file (load-private-font file))
-                  (make-text-style "Euro Caps" :roman 12)
-                  (make-text-style :sans-serif :roman 12))))))
+            (make-text-style :sans-serif :roman 12))))
 
 (behavior 'report-text-style
   (let ((style (report-text-style)))
-    (should-equal (if (euro-caps-file) "Euro Caps" :sans-serif)
-                  (text-style-family style))
+    (should-eq :sans-serif (text-style-family style))
     (should-eq :roman (text-style-face style))
     (should= 12 (text-style-size style))))
 
@@ -695,10 +674,10 @@ The top row is the current position and the game date and time.  The
 left cluster is the commander: name, ranks, legal state, and credits.
 The next cluster is the ship when the commander is in one, including
 the hull, shields, power distribution, fuel, and cargo.  On foot, that
-cluster switches to the suit.  Labels use Euro Caps when Elite
-Dangerous Market Connector has installed that font, in the orange on
-black of a cockpit display, inside an orange rule.  The files are
-read again every second until the window closes.  Returns the frame."
+cluster switches to the suit.  Labels use the standard sans serif,
+in the orange on black of a cockpit display, inside an orange rule.
+The files are read again every second until the window closes.
+Returns the frame."
   (let* ((frame (make-application-frame 'bag-frame))
          (manager (make-frame-manager))
          (timer (sb-ext:make-timer

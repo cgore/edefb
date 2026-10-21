@@ -10,8 +10,8 @@ name, the ranks, the legal state, and the credits.  The next cluster
 is the ship when the commander is aboard, including the hull, whether
 the shields are up, the power distribution, the fuel, and the cargo
 used, free, and total.  On foot, that cluster switches to the suit.
-The report uses Euro Caps when Elite Dangerous Market Connector has
-installed that font, in the orange on black of a ship cockpit display.
+The report is orange text on black, in the style of a ship cockpit
+display.
 It keeps reading those files while the window is open.
 
 Those files live under
