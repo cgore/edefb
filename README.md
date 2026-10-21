@@ -4,6 +4,10 @@ EDEFB is the Elite Dangerous Electronic Flight Bag.  It is a Common Lisp
 companion for the game.  It reads the live player journal and the snapshot
 files written beside it, and keeps the picture of the ship you are flying.
 
+The window is a live report.  It shows the ship, the current system and
+station, and the fuel, cargo, and credits from the cockpit status.  It
+keeps reading those files while the window is open.
+
 Those files live under
 `Saved Games\Frontier Developments\Elite Dangerous`: the NDJSON journal,
 plus `Status.json`, `Cargo.json`, `ModulesInfo.json`, `NavRoute.json`, and

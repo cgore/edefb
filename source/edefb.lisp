@@ -35,13 +35,29 @@
 (defpackage :edefb
   (:use :common-lisp)
   (:import-from :edefb/flight
+                :read-report
                 :read-ship
+                :report-body
+                :report-destination
+                :report-name
+                :report-situation
+                :report-station
+                :report-system
+                :report-type
                 :saved-games-directory
                 :ship-name
                 :ship-type)
   (:import-from :edefb/bag
                 :show-ship)
-  (:export :read-ship
+  (:export :read-report
+           :read-ship
+           :report-body
+           :report-destination
+           :report-name
+           :report-situation
+           :report-station
+           :report-system
+           :report-type
            :saved-games-directory
            :ship-name
            :ship-type
