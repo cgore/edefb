@@ -6,8 +6,9 @@ files written beside it, and keeps the picture of the ship you are flying.
 
 The window is a live report.  It shows the ship name, the ship type,
 and the landing pad class, then the current system, station, and body,
-and the fuel, cargo, and credits from the cockpit status.  It keeps
-reading those files while the window is open.
+and the fuel, cargo, and credits from the cockpit status.  The report
+uses Euro Caps when Elite Dangerous Market Connector has installed that
+font.  It keeps reading those files while the window is open.
 
 Those files live under
 `Saved Games\Frontier Developments\Elite Dangerous`: the NDJSON journal,

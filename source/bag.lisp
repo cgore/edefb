@@ -43,6 +43,52 @@
            :show-ship))
 (in-package :edefb/bag)
 
+(defun euro-caps-file ()
+  "Return EDMC's Euro Caps font file, or NIL when it is not installed."
+  (let ((local (uiop:getenv "LOCALAPPDATA")))
+    (dolist (directory (list #p"C:/Program Files (x86)/EDMarketConnector/"
+                             #p"C:/Program Files/EDMarketConnector/"
+                             (when (and (stringp local) (plusp (length local)))
+                               (merge-pathnames
+                                #p"EDMarketConnector/"
+                                (pathname (concatenate 'string
+                                                       (substitute #\/ #\\ local)
+                                                       "/"))))))
+      (when directory
+        (let ((file (probe-file (merge-pathnames #p"EUROCAPS.TTF" directory))))
+          (when file
+            (return file)))))))
+
+(defvar *report-text-style* nil
+  "The text style of the live report, cached after the first lookup.")
+
+(defun report-text-style ()
+  "Return the text style used by the live report.
+Euro Caps is the face EDMC ships.  When that file is not on this
+machine, the style is the default sans serif."
+  (or *report-text-style*
+      (setf *report-text-style*
+            (let ((file (euro-caps-file)))
+              (if (and file (load-private-font file))
+                  (make-text-style "Euro Caps" :roman 12)
+                  (make-text-style :sans-serif :roman 12))))))
+
+(behavior 'report-text-style
+  (let ((style (report-text-style)))
+    (should-equal (if (euro-caps-file) "Euro Caps" :sans-serif)
+                  (text-style-family style))
+    (should-eq :roman (text-style-face style))
+    (should= 12 (text-style-size style))))
+
+(defun report-label (text &key caption)
+  "Return a report label showing TEXT.
+CAPTION true is a fixed caption.  A value label grows across the row."
+  (if caption
+      (make-pane :label :label text :text-style (report-text-style)
+                 :min-width 140 :max-width 140 :height 28)
+      (make-pane :label :label text :text-style (report-text-style)
+                 :min-width 320 :height 28)))
+
 (define-application-frame bag-frame ()
   ((report
     :initarg :report
@@ -50,39 +96,28 @@
     :accessor bag-report))
   (:pretty-name "EDEFB")
   (:panes
-   (name-label :label :label "Ship Name"
-               :min-width 120 :max-width 120 :height 24)
-   (kind-label :label :label "Ship Type"
-               :min-width 120 :max-width 120 :height 24)
-   (pad-label :label :label "Pad Class"
-              :min-width 120 :max-width 120 :height 24)
-   (system-label :label :label "System"
-                 :min-width 120 :max-width 120 :height 24)
-   (station-label :label :label "Station"
-                  :min-width 120 :max-width 120 :height 24)
-   (body-label :label :label "Body"
-               :min-width 120 :max-width 120 :height 24)
-   (state-label :label :label "State"
-                :min-width 120 :max-width 120 :height 24)
-   (fuel-label :label :label "Fuel"
-               :min-width 120 :max-width 120 :height 24)
-   (cargo-label :label :label "Cargo"
-                :min-width 120 :max-width 120 :height 24)
-   (credits-label :label :label "Credits"
-                  :min-width 120 :max-width 120 :height 24)
-   (destination-label :label :label "Destination"
-                      :min-width 120 :max-width 120 :height 24)
-   (name :label :label "-" :min-width 320 :height 24)
-   (kind :label :label "-" :min-width 320 :height 24)
-   (pad :label :label "-" :min-width 320 :height 24)
-   (system :label :label "-" :min-width 320 :height 24)
-   (station :label :label "-" :min-width 320 :height 24)
-   (body :label :label "-" :min-width 320 :height 24)
-   (state :label :label "-" :min-width 320 :height 24)
-   (fuel :label :label "-" :min-width 320 :height 24)
-   (cargo :label :label "-" :min-width 320 :height 24)
-   (credits :label :label "-" :min-width 320 :height 24)
-   (destination :label :label "-" :min-width 320 :height 24))
+   (name-label (report-label "Ship Name" :caption t))
+   (kind-label (report-label "Ship Type" :caption t))
+   (pad-label (report-label "Pad Class" :caption t))
+   (system-label (report-label "System" :caption t))
+   (station-label (report-label "Station" :caption t))
+   (body-label (report-label "Body" :caption t))
+   (state-label (report-label "State" :caption t))
+   (fuel-label (report-label "Fuel" :caption t))
+   (cargo-label (report-label "Cargo" :caption t))
+   (credits-label (report-label "Credits" :caption t))
+   (destination-label (report-label "Destination" :caption t))
+   (name (report-label "-"))
+   (kind (report-label "-"))
+   (pad (report-label "-"))
+   (system (report-label "-"))
+   (station (report-label "-"))
+   (body (report-label "-"))
+   (state (report-label "-"))
+   (fuel (report-label "-"))
+   (cargo (report-label "-"))
+   (credits (report-label "-"))
+   (destination (report-label "-")))
   (:layouts
    (default
     (horizontally (:spacing 24)
@@ -93,7 +128,7 @@
       (vertically (:spacing 8)
         name kind pad system station body state fuel cargo credits
         destination))))
-  (:geometry 600 380))
+  (:geometry 640 420))
 
 (defun shown-text (value)
   "Return VALUE when it is a non-empty string, otherwise a dash."
@@ -168,6 +203,10 @@ The caption labels stay fixed.  An empty value is shown as a dash."
                                      :balance 2500
                                      :destination "Hutton Orbital"))))
     (present-report frame)
+    (should-eq (report-text-style)
+               (gadget-text-style (find-pane-named frame 'name-label)))
+    (should-eq (report-text-style)
+               (gadget-text-style (find-pane-named frame 'destination)))
     (should-equal "Ship Name"
                   (gadget-label (find-pane-named frame 'name-label)))
     (should-equal "Ship Type"
@@ -223,8 +262,9 @@ The caption labels stay fixed.  An empty value is shown as a dash."
 (defun show-ship (&optional (directory (saved-games-directory)))
   "Open the live report for DIRECTORY and run its command loop.
 The report shows the ship, its landing pad, where it is, and the
-cockpit figures.  It is read again every second until the window
-closes.  Returns the frame."
+cockpit figures.  Labels use Euro Caps when Elite Dangerous Market
+Connector has installed that font.  It is read again every second
+until the window closes.  Returns the frame."
   (let* ((frame (make-application-frame 'bag-frame))
          (manager (make-frame-manager))
          (timer (sb-ext:make-timer
