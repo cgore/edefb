@@ -35,6 +35,7 @@
 (defpackage :edefb
   (:use :common-lisp)
   (:import-from :edefb/flight
+                :pad-class
                 :read-report
                 :read-ship
                 :report-body
@@ -49,7 +50,8 @@
                 :ship-type)
   (:import-from :edefb/bag
                 :show-ship)
-  (:export :read-report
+  (:export :pad-class
+           :read-report
            :read-ship
            :report-body
            :report-destination

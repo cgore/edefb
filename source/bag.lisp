@@ -50,30 +50,56 @@
     :accessor bag-report))
   (:pretty-name "EDEFB")
   (:panes
-   (name :label :label "" :width 520 :height 24)
-   (kind :label :label "" :width 520 :height 24)
-   (system :label :label "" :width 520 :height 24)
-   (station :label :label "" :width 520 :height 24)
-   (body :label :label "" :width 520 :height 24)
-   (state :label :label "" :width 520 :height 24)
-   (fuel :label :label "" :width 520 :height 24)
-   (cargo :label :label "" :width 520 :height 24)
-   (credits :label :label "" :width 520 :height 24)
-   (destination :label :label "" :width 520 :height 24))
+   (name-label :label :label "Ship Name"
+               :min-width 120 :max-width 120 :height 24)
+   (kind-label :label :label "Ship Type"
+               :min-width 120 :max-width 120 :height 24)
+   (pad-label :label :label "Pad Class"
+              :min-width 120 :max-width 120 :height 24)
+   (system-label :label :label "System"
+                 :min-width 120 :max-width 120 :height 24)
+   (station-label :label :label "Station"
+                  :min-width 120 :max-width 120 :height 24)
+   (body-label :label :label "Body"
+               :min-width 120 :max-width 120 :height 24)
+   (state-label :label :label "State"
+                :min-width 120 :max-width 120 :height 24)
+   (fuel-label :label :label "Fuel"
+               :min-width 120 :max-width 120 :height 24)
+   (cargo-label :label :label "Cargo"
+                :min-width 120 :max-width 120 :height 24)
+   (credits-label :label :label "Credits"
+                  :min-width 120 :max-width 120 :height 24)
+   (destination-label :label :label "Destination"
+                      :min-width 120 :max-width 120 :height 24)
+   (name :label :label "-" :min-width 320 :height 24)
+   (kind :label :label "-" :min-width 320 :height 24)
+   (pad :label :label "-" :min-width 320 :height 24)
+   (system :label :label "-" :min-width 320 :height 24)
+   (station :label :label "-" :min-width 320 :height 24)
+   (body :label :label "-" :min-width 320 :height 24)
+   (state :label :label "-" :min-width 320 :height 24)
+   (fuel :label :label "-" :min-width 320 :height 24)
+   (cargo :label :label "-" :min-width 320 :height 24)
+   (credits :label :label "-" :min-width 320 :height 24)
+   (destination :label :label "-" :min-width 320 :height 24))
   (:layouts
-   (default (vertically (:spacing 8)
-              name kind system station body state fuel cargo credits
-              destination)))
-  (:geometry 560 360))
+   (default
+    (horizontally (:spacing 24)
+      (vertically (:spacing 8)
+        name-label kind-label pad-label system-label station-label
+        body-label state-label fuel-label cargo-label credits-label
+        destination-label)
+      (vertically (:spacing 8)
+        name kind pad system station body state fuel cargo credits
+        destination))))
+  (:geometry 600 380))
 
-(defun report-line (caption value)
-  "Return one report line, CAPTION then VALUE.
-An empty VALUE is shown as a dash."
-  (format nil "~13A~A"
-          caption
-          (if (and (stringp value) (plusp (length value)))
-              value
-              "-")))
+(defun shown-text (value)
+  "Return VALUE when it is a non-empty string, otherwise a dash."
+  (if (and (stringp value) (plusp (length value)))
+      value
+      "-"))
 
 (defun fuel-text (report)
   "Return REPORT's fuel line, or NIL when the tank level is unknown."
@@ -104,24 +130,27 @@ An empty VALUE is shown as a dash."
   frame)
 
 (defun present-report (frame)
-  "Put FRAME's report on its labels."
+  "Put FRAME's report on its value labels.
+The caption labels stay fixed.  An empty value is shown as a dash."
   (let ((report (bag-report frame)))
-    (set-report-label frame 'name (or (and report (report-name report)) "-"))
-    (set-report-label frame 'kind (or (and report (report-type report)) "-"))
+    (set-report-label frame 'name (shown-text (and report (report-name report))))
+    (set-report-label frame 'kind (shown-text (and report (report-type report))))
+    (set-report-label frame 'pad
+                      (shown-text (and report
+                                       (pad-class (report-type report)))))
     (set-report-label frame 'system
-                      (report-line "System" (and report (report-system report))))
+                      (shown-text (and report (report-system report))))
     (set-report-label frame 'station
-                      (report-line "Station" (and report (report-station report))))
+                      (shown-text (and report (report-station report))))
     (set-report-label frame 'body
-                      (report-line "Body" (and report (report-body report))))
+                      (shown-text (and report (report-body report))))
     (set-report-label frame 'state
-                      (report-line "State" (and report (report-situation report))))
-    (set-report-label frame 'fuel (report-line "Fuel" (fuel-text report)))
-    (set-report-label frame 'cargo (report-line "Cargo" (cargo-text report)))
-    (set-report-label frame 'credits (report-line "Credits" (credits-text report)))
+                      (shown-text (and report (report-situation report))))
+    (set-report-label frame 'fuel (shown-text (fuel-text report)))
+    (set-report-label frame 'cargo (shown-text (cargo-text report)))
+    (set-report-label frame 'credits (shown-text (credits-text report)))
     (set-report-label frame 'destination
-                      (report-line "Destination"
-                                   (and report (report-destination report)))))
+                      (shown-text (and report (report-destination report)))))
   frame)
 
 (behavior 'present-report
@@ -139,20 +168,46 @@ An empty VALUE is shown as a dash."
                                      :balance 2500
                                      :destination "Hutton Orbital"))))
     (present-report frame)
+    (should-equal "Ship Name"
+                  (gadget-label (find-pane-named frame 'name-label)))
+    (should-equal "Ship Type"
+                  (gadget-label (find-pane-named frame 'kind-label)))
+    (should-equal "Pad Class"
+                  (gadget-label (find-pane-named frame 'pad-label)))
     (should-equal "Kipling's Ghost"
                   (gadget-label (find-pane-named frame 'name)))
     (should-equal "Mandalay"
                   (gadget-label (find-pane-named frame 'kind)))
-    (should-equal "System       Sol"
+    (should-equal "Medium"
+                  (gadget-label (find-pane-named frame 'pad)))
+    (should-equal "Sol"
                   (gadget-label (find-pane-named frame 'system)))
-    (should-equal "Station      Galileo"
+    (should-equal "Galileo"
                   (gadget-label (find-pane-named frame 'station)))
-    (should-equal "Fuel         10.5 / 32.0 t"
+    (should-equal "Earth"
+                  (gadget-label (find-pane-named frame 'body)))
+    (should-equal "Docked"
+                  (gadget-label (find-pane-named frame 'state)))
+    (should-equal "10.5 / 32.0 t"
                   (gadget-label (find-pane-named frame 'fuel)))
-    (should-equal "Credits      2,500 CR"
+    (should-equal "4.0 t"
+                  (gadget-label (find-pane-named frame 'cargo)))
+    (should-equal "2,500 CR"
                   (gadget-label (find-pane-named frame 'credits)))
-    (should-equal "Destination  Hutton Orbital"
-                  (gadget-label (find-pane-named frame 'destination)))))
+    (should-equal "Hutton Orbital"
+                  (gadget-label (find-pane-named frame 'destination))))
+  (let ((frame (make-application-frame
+                'bag-frame
+                :report (make-report :name "X" :type "Not A Ship"))))
+    (present-report frame)
+    (should-equal "Not A Ship"
+                  (gadget-label (find-pane-named frame 'kind)))
+    (should-equal "-" (gadget-label (find-pane-named frame 'pad)))
+    (should-equal "-" (gadget-label (find-pane-named frame 'system))))
+  (let ((frame (make-application-frame 'bag-frame)))
+    (present-report frame)
+    (should-equal "-" (gadget-label (find-pane-named frame 'name)))
+    (should-equal "-" (gadget-label (find-pane-named frame 'pad)))))
 
 (defun update-report (frame directory)
   "Read DIRECTORY and put that report on FRAME."
@@ -167,8 +222,9 @@ An empty VALUE is shown as a dash."
 
 (defun show-ship (&optional (directory (saved-games-directory)))
   "Open the live report for DIRECTORY and run its command loop.
-The report shows the ship, where it is, and the cockpit figures.
-It is read again every second until the window closes.  Returns the frame."
+The report shows the ship, its landing pad, where it is, and the
+cockpit figures.  It is read again every second until the window
+closes.  Returns the frame."
   (let* ((frame (make-application-frame 'bag-frame))
          (manager (make-frame-manager))
          (timer (sb-ext:make-timer

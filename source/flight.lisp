@@ -39,6 +39,7 @@
                 :parse)
   (:export :make-report
            :make-ship
+           :pad-class
            :read-report
            :read-ship
            :report
@@ -83,6 +84,98 @@ credits.  DESTINATION is the selected navigation target."
   cargo
   balance
   destination)
+
+(defparameter *pad-classes*
+  '(("Small"
+     "SideWinder" "Sidewinder Mk I"
+     "Eagle" "Eagle Mk II"
+     "Hauler"
+     "Adder"
+     "Empire_Eagle" "Imperial Eagle"
+     "Viper" "Viper MkIII" "Viper Mk III"
+     "Viper_MkIV" "Viper MkIV" "Viper Mk IV"
+     "CobraMkIII" "Cobra MkIII" "Cobra Mk III"
+     "CobraMkIV" "Cobra MkIV" "Cobra Mk IV"
+     "DiamondBack" "Diamondback Scout"
+     "DiamondBackXL" "Diamondback Explorer"
+     "Empire_Courier" "Imperial Courier"
+     "Vulture"
+     "CobraMkV" "Cobra MkV" "Cobra Mk V"
+     "SmallCombat01_NX" "Kestrel Mk II" "Kestrel MkII")
+    ("Medium"
+     "Asp_Scout" "Asp Scout"
+     "Asp" "Asp Explorer"
+     "Federation_Dropship" "Federal Dropship"
+     "Federation_Dropship_MkII" "Federal Assault Ship"
+     "Federation_Gunship" "Federal Gunship"
+     "Independant_Trader" "Keelback"
+     "Type6" "Type-6 Transporter" "Type-6"
+     "Dolphin"
+     "TypeX" "Alliance Chieftain"
+     "TypeX_2" "Alliance Crusader"
+     "TypeX_3" "Alliance Challenger"
+     "Krait_MkII" "Krait MkII" "Krait Mk II"
+     "Krait_Light" "Krait Phantom"
+     "Python"
+     "FerDeLance" "Fer-de-Lance"
+     "Mamba"
+     "Python_NX" "Python MkII" "Python Mk II"
+     "Type8" "Type-8 Transporter" "Type-8"
+     "Mandalay"
+     "Corsair"
+     "LakonMiner" "Type-11 Prospector" "Type-11"
+     "MediumTransport01" "Lynx Highliner")
+    ("Large"
+     "Type7" "Type-7 Transporter" "Type-7"
+     "Empire_Trader" "Imperial Clipper"
+     "Orca"
+     "Type9" "Type-9 Heavy" "Type-9"
+     "BelugaLiner" "Beluga Liner"
+     "Anaconda"
+     "Anaconda Mk II" "Anaconda MkII" "Anaconda Mk.II"
+     "Federation_Corvette" "Federal Corvette"
+     "Cutter" "Imperial Cutter"
+     "Type9_Military" "Type-10 Defender" "Type-10"
+     "PantherMkII" "Panther Clipper MkII" "Panther Clipper Mk II"
+     "Explorer_NX" "Caspian Explorer"))
+  "Landing pad class of each known ship type.
+The journal names the type, such as Mandalay or CobraMkIII, and does
+not name the pad.  Independant_Trader is the Keelback: that is the
+spelling in the journal.  A type that is not listed has no known pad.")
+
+(defun pad-class (ship-type)
+  "Return the landing pad class of SHIP-TYPE, or NIL when it is unknown.
+Elite Dangerous sizes a ship Small, Medium, or Large."
+  (when (stringp ship-type)
+    (dolist (group *pad-classes*)
+      (when (member ship-type (rest group) :test #'string-equal)
+        (return (first group))))))
+
+(behavior 'pad-class
+  (should-equal "Medium" (pad-class "Mandalay"))
+  (should-equal "Medium" (pad-class "mandalay"))
+  (should-equal "Small" (pad-class "SideWinder"))
+  (should-equal "Small" (pad-class "Cobra Mk V"))
+  (should-equal "Medium" (pad-class "Dolphin"))
+  (should-equal "Medium" (pad-class "Independant_Trader"))
+  (should-equal "Medium" (pad-class "Federation_Dropship"))
+  (should-equal "Large" (pad-class "Empire_Trader"))
+  (should-equal "Large" (pad-class "Anaconda"))
+  (should-equal "Large" (pad-class "Anaconda Mk II"))
+  (should-be-null (pad-class "Not A Ship"))
+  (should-be-null (pad-class nil))
+  (let ((seen (make-hash-table :test #'equal)))
+    (dolist (group *pad-classes*)
+      (should-be-true (member (first group)
+                              '("Small" "Medium" "Large")
+                              :test #'string=))
+      (should-be-true (rest group))
+      (dolist (name (rest group))
+        (should-be-true (stringp name))
+        (let ((key (string-downcase name)))
+          (should-be-null (gethash key seen))
+          (setf (gethash key seen) t))
+        (should-equal (first group) (pad-class name))))))
 
 (defun saved-games-directory ()
   "Return this user's Elite Dangerous player directory."
