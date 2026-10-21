@@ -80,13 +80,25 @@ machine, the style is the default sans serif."
     (should-eq :roman (text-style-face style))
     (should= 12 (text-style-size style))))
 
+(defun report-orange ()
+  "Return the orange of an Elite Dangerous cockpit display.
+The channels are the #FF8000 hologram orange."
+  (make-rgb-color 1 128/255 0))
+
+(defun report-background ()
+  "Return the black of a cockpit panel."
+  +black+)
+
 (defun report-label (text &key caption)
   "Return a report label showing TEXT.
-CAPTION true is a fixed caption.  A value label grows across the row."
+CAPTION true is a fixed caption.  A value label grows across the row.
+The colors are the orange on black of a cockpit display."
   (if caption
       (make-pane :label :label text :text-style (report-text-style)
+                 :foreground (report-orange) :background (report-background)
                  :min-width 140 :max-width 140 :height 28)
       (make-pane :label :label text :text-style (report-text-style)
+                 :foreground (report-orange) :background (report-background)
                  :min-width 320 :height 28)))
 
 (define-application-frame bag-frame ()
@@ -120,15 +132,44 @@ CAPTION true is a fixed caption.  A value label grows across the row."
    (destination (report-label "-")))
   (:layouts
    (default
-    (horizontally (:spacing 24)
-      (vertically (:spacing 8)
-        name-label kind-label pad-label system-label station-label
-        body-label state-label fuel-label cargo-label credits-label
-        destination-label)
-      (vertically (:spacing 8)
-        name kind pad system station body state fuel cargo credits
-        destination))))
+    (outlining (:thickness 8 :ink (report-orange))
+      (horizontally (:spacing 24)
+        (vertically (:spacing 8)
+          name-label kind-label pad-label system-label station-label
+          body-label state-label fuel-label cargo-label credits-label
+          destination-label)
+        (vertically (:spacing 8)
+          name kind pad system station body state fuel cargo credits
+          destination)))))
   (:geometry 640 420))
+
+(defmethod initialize-instance :around ((frame bag-frame) &rest initargs)
+  "Give the report the black of a cockpit panel.
+An :AFTER method would replace the pane constructor."
+  (declare (ignore initargs))
+  (call-next-method)
+  (setf (frame-background frame) (report-background)))
+
+(behavior 'report-colors
+  (let ((frame (make-application-frame 'bag-frame)))
+    (should-eq +black+ (frame-background frame))
+    (multiple-value-bind (red green blue)
+        (color-rgb (outlining-ink (frame-panes frame)))
+      (should= 1 red)
+      (should= 128/255 green)
+      (should= 0 blue))
+    (let ((caption (find-pane-named frame 'name-label))
+          (value (find-pane-named frame 'name)))
+      (multiple-value-bind (red green blue) (color-rgb (gadget-foreground caption))
+        (should= 1 red)
+        (should= 128/255 green)
+        (should= 0 blue))
+      (should-eq +black+ (gadget-background caption))
+      (multiple-value-bind (red green blue) (color-rgb (gadget-foreground value))
+        (should= 1 red)
+        (should= 128/255 green)
+        (should= 0 blue))
+      (should-eq +black+ (gadget-background value)))))
 
 (defun shown-text (value)
   "Return VALUE when it is a non-empty string, otherwise a dash."
@@ -263,8 +304,9 @@ The caption labels stay fixed.  An empty value is shown as a dash."
   "Open the live report for DIRECTORY and run its command loop.
 The report shows the ship, its landing pad, where it is, and the
 cockpit figures.  Labels use Euro Caps when Elite Dangerous Market
-Connector has installed that font.  It is read again every second
-until the window closes.  Returns the frame."
+Connector has installed that font, in the orange on black of a cockpit
+display, inside an orange rule.  It is read again every second until
+the window closes.  Returns the frame."
   (let* ((frame (make-application-frame 'bag-frame))
          (manager (make-frame-manager))
          (timer (sb-ext:make-timer
