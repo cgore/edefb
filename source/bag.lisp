@@ -83,6 +83,7 @@ orange on black of a cockpit display."
              :foreground (report-orange)
              :background (report-background)
              :min-width min-width
+             :max-width +fill+
              :height 28
              (when max-width
                (list :max-width max-width)))))
