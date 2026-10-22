@@ -130,16 +130,14 @@ NIL follows the current situation.  :SHIP and :FOOT hold that choice."))
    (empire (report-label "-"))
    (credits (report-label "-"))
    (legal (report-label "-"))
-   (ship-light (make-pane :push-button :label "Ship"
-                         :text-style (report-text-style)
-                         :foreground (report-orange)
-                         :background (report-background)
-                         :min-width 150 :max-width 150 :height 28))
-   (foot-light (make-pane :push-button :label "On Foot"
-                          :text-style (report-text-style)
-                          :foreground (report-blue)
-                          :background (report-background)
-                          :min-width 150 :max-width 150 :height 28))
+   (ship-light (make-pane :push-button :label ""
+                         :min-width 22 :max-width 22
+                         :min-height 22 :max-height 22 :height 22))
+   (ship-caption (report-label "Ship" :caption t))
+   (foot-light (make-pane :push-button :label ""
+                          :min-width 22 :max-width 22
+                          :min-height 22 :max-height 22 :height 22))
+   (foot-caption (report-label "On Foot" :caption t))
    (name-label (report-label "Ship Name" :caption t))
    (kind-label (report-label "Ship Type" :caption t))
    (ident-label (report-label "Ident" :caption t))
@@ -180,7 +178,8 @@ NIL follows the current situation.  :SHIP and :FOOT hold that choice."))
                 commander combat trade explore exo mercenary cqc
                 federation empire credits legal)))
           (vertically (:spacing 8)
-            (horizontally (:spacing 16) ship-light foot-light)
+            (horizontally (:spacing 10)
+              ship-light ship-caption foot-light foot-caption)
             (horizontally (:spacing 24)
               (vertically (:spacing 8)
                 name-label kind-label ident-label pad-label hull-label
@@ -460,22 +459,22 @@ VIEW is :SHIP or :FOOT.  The other picture remains available."
 
 (defun attach-vehicle-lights (frame)
   "Give FRAME's vehicle lights their callbacks."
-  (setf (gadget-activate-callback (find-pane-named frame 'ship-light))
-        #'choose-ship-view)
-  (setf (gadget-activate-callback (find-pane-named frame 'foot-light))
-        #'choose-foot-view)
+  (let ((ship (find-pane-named frame 'ship-light))
+        (foot (find-pane-named frame 'foot-light)))
+    (setf (gadget-client ship) frame
+          (gadget-client foot) frame
+          (gadget-activate-callback ship) #'choose-ship-view
+          (gadget-activate-callback foot) #'choose-foot-view))
   frame)
 
-(defun set-light (frame name lit foreground)
-  "Set the light NAME of FRAME to its lit or dark colors.
-LIT true is the bright cockpit color.  A dark light keeps the same
-foreground and uses a dim background, so the choice is still visible."
-  (let ((pane (find-pane-named frame name)))
-    (setf (gadget-foreground pane) foreground
-          (gadget-background pane)
-          (if lit
-              (report-background)
-              (make-rgb-color 0.15 0.15 0.15))))
+(defun set-light (frame name lit color)
+  "Set the square light NAME of FRAME to its lit or dark color.
+LIT true fills the square with COLOR.  A dark light is a dim square
+of the same color, so an unselected picture is still visible."
+  (let ((pane (find-pane-named frame name))
+        (ink (if lit color (make-rgb-color 0.12 0.12 0.12))))
+    (setf (gadget-foreground pane) ink
+          (gadget-background pane) ink))
   frame)
 
 (defun ship-lines (report)
@@ -607,12 +606,12 @@ value is shown as a dash."
           (current (current-vehicle-view report)))
       (set-light frame 'ship-light (eq view :ship) (report-orange))
       (set-light frame 'foot-light (eq view :foot) (report-blue))
-      (set-report-label frame 'ship-light
+      (set-report-label frame 'ship-caption
                         (if (eq current :ship)
-                            (format nil "* ~A" (vehicle-heading report))
+                            (vehicle-heading report)
                             "Ship"))
-      (set-report-label frame 'foot-light
-                        (if (eq current :foot) "* On Foot" "On Foot")))
+      (set-report-label frame 'foot-caption
+                        (if (eq current :foot) "On Foot" "On Foot")))
     (loop for (value-pane . caption-pane) in *vehicle-rows*
           for line in (vehicle-lines report (shown-vehicle-view frame))
           do (present-line frame value-pane caption-pane
@@ -684,10 +683,10 @@ value is shown as a dash."
     (should-be-null (find-pane-named frame 'position-label :errorp nil))
     (should-equal "3312-10-21  01:15:10"
                   (gadget-label (find-pane-named frame 'time)))
-    (should-equal "* Ship"
-                  (gadget-label (find-pane-named frame 'ship-light)))
+    (should-equal "Ship"
+                  (gadget-label (find-pane-named frame 'ship-caption)))
     (should-equal "On Foot"
-                  (gadget-label (find-pane-named frame 'foot-light)))
+                  (gadget-label (find-pane-named frame 'foot-caption)))
     (should-equal "Ship Name"
                   (gadget-label (find-pane-named frame 'name-label)))
     (should-equal "Kipling's Ghost"
@@ -730,10 +729,10 @@ value is shown as a dash."
                                      :heading 12
                                      :system "Sol"))))
     (present-report frame)
-    (should-equal "* On Foot"
-                  (gadget-label (find-pane-named frame 'foot-light)))
+    (should-equal "On Foot"
+                  (gadget-label (find-pane-named frame 'foot-caption)))
     (should-equal "Ship"
-                  (gadget-label (find-pane-named frame 'ship-light)))
+                  (gadget-label (find-pane-named frame 'ship-caption)))
     (should-equal "Suit"
                   (gadget-label (find-pane-named frame 'name-label)))
     (should-equal "Artemis Suit"
@@ -764,8 +763,8 @@ value is shown as a dash."
                 'bag-frame
                 :report (make-report :situation "SRV" :shields :down))))
     (present-report frame)
-    (should-equal "* SRV"
-                  (gadget-label (find-pane-named frame 'ship-light)))
+    (should-equal "SRV"
+                  (gadget-label (find-pane-named frame 'ship-caption)))
     (should-equal "Vehicle"
                   (gadget-label (find-pane-named frame 'name-label)))
     (should-equal "SRV"
@@ -776,8 +775,8 @@ value is shown as a dash."
                 'bag-frame
                 :report (make-report :name "X" :type "Not A Ship"))))
     (present-report frame)
-    (should-equal "* Ship"
-                  (gadget-label (find-pane-named frame 'ship-light)))
+    (should-equal "Ship"
+                  (gadget-label (find-pane-named frame 'ship-caption)))
     (should-equal "Not A Ship"
                   (gadget-label (find-pane-named frame 'kind)))
     (should-equal "-" (gadget-label (find-pane-named frame 'pad)))
@@ -814,8 +813,8 @@ value is shown as a dash."
                   (gadget-label (find-pane-named frame 'name-label)))
     (should-equal "Artemis Suit"
                   (gadget-label (find-pane-named frame 'name)))
-    (should-equal "* Ship"
-                  (gadget-label (find-pane-named frame 'ship-light)))
+    (should-equal "Ship"
+                  (gadget-label (find-pane-named frame 'ship-caption)))
     (choose-vehicle-view frame :ship)
     (should-equal "Ship Name"
                   (gadget-label (find-pane-named frame 'name-label)))

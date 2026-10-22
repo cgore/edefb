@@ -7,11 +7,10 @@ files written beside it, and keeps the picture of the ship you are flying.
 The window is a live report.  Along the top are the game date and
 time, then the current position.  A fleet carrier is shown as its
 callsign and the name the journal wrote.  The left cluster is the
-commander: the name, the ranks, the legal state, and the credits.  The next cluster has a Ship light and an On Foot light, in the orange
-and blue of the cockpit indicators.  The bright light is the picture
-being shown, and a star marks the current situation.  Either light
-shows that picture, so the ship remains available while the commander
-is on foot.  The ship picture includes the hull, whether the shields
+commander: the name, the ranks, the legal state, and the credits.  The next cluster has a Ship light and an On Foot light, the orange and
+blue squares of the cockpit indicators.  The bright square is the
+picture being shown.  Either square shows that picture, so the ship
+remains available while the commander is on foot.  The ship picture includes the hull, whether the shields
 are up, the power distribution, the fuel, and the cargo used, free,
 and total.  The on-foot picture is the suit.
 The report is orange text on black, in the style of a ship cockpit
