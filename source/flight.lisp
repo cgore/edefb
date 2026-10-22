@@ -123,7 +123,8 @@ are the journal rank integers.  HULL is the hull fraction from the
 last Loadout or HullDamage.  SHIELDS is :UP or :DOWN.  PIPS is the
 SYS, ENG, and WEP distribution in half-pips.  JUMP-RANGE is light
 years.  REBUY is credits.  LEGAL is the legal state.  TIMESTAMP is
-the UTC time the game wrote.  SUIT, HEALTH, OXYGEN, GRAVITY,
+the UTC time the game wrote.  CARRIERS are callsigns and given names
+seen in this journal.  SUIT, HEALTH, OXYGEN, GRAVITY,
 TEMPERATURE, and WEAPON describe the commander on foot.  BREATHABLE
 is :YES or :NO."
   name
@@ -154,6 +155,7 @@ is :YES or :NO."
   rebuy
   legal
   timestamp
+  carriers
   suit
   health
   oxygen
@@ -457,15 +459,37 @@ another callsign replaces both."
             (report-station report) name)))
   report)
 
+(defun remember-carrier (report callsign name)
+  "Remember that CALLSIGN has the given name NAME.
+The spelling is the spelling the journal wrote.  A repeated callsign
+keeps the latest name."
+  (let ((callsign (text-value callsign))
+        (name (text-value name)))
+    (when (and (carrier-callsign? callsign) name)
+      (setf (report-carriers report)
+            (acons callsign name
+                   (remove callsign (report-carriers report)
+                           :key #'car :test #'string-equal)))))
+  report)
+
+(defun known-carrier-name (report callsign)
+  "Return the given name REPORT has seen for CALLSIGN."
+  (cdr (assoc callsign (and report (report-carriers report))
+              :test #'string-equal)))
+
+(defun carrier-known? (report callsign)
+  "Return true when REPORT already names the carrier CALLSIGN."
+  (and (carrier-callsign? callsign)
+       (string-equal callsign (report-station-callsign report))
+       (text-value (report-station report))))
+
 (defun note-carrier-signal (report signal)
-  "Copy a fleet carrier SIGNAL onto REPORT when it names the station.
-A signal for another carrier is a contact, not the current station.
+  "Remember the carrier named by SIGNAL, and use it when it is current.
 The spelling is left as the journal wrote it."
   (multiple-value-bind (callsign name) (split-carrier-signal signal)
-    (when (and callsign
-               (or (null (report-station report))
-                   (string-equal callsign (report-station report))
-                   (string-equal callsign (report-station-callsign report))))
+    (remember-carrier report callsign name)
+    (when (or (string-equal callsign (report-station report))
+              (string-equal callsign (report-station-callsign report)))
       (note-carrier-name report callsign name)))
   report)
 
@@ -478,13 +502,17 @@ records NAME as its callsign.  Other stations use NAME as written."
     (when kind
       (setf (report-station-kind report) kind))
     (when name
-      (if (and (string-equal kind "FleetCarrier")
-               (carrier-callsign? name)
-               (string-equal name (report-station-callsign report))
-               (text-value (report-station report)))
-          (setf (report-station-callsign report) name)
-          (setf (report-station report) name
-                (report-station-callsign report) nil))))
+      (cond
+        ((carrier-known? report name))
+        ((and (string-equal kind "FleetCarrier") (carrier-callsign? name))
+         (let ((known (known-carrier-name report name)))
+           (if known
+               (note-carrier-name report name known)
+               (setf (report-station report) name
+                     (report-station-callsign report) name))))
+        (t
+         (setf (report-station report) name
+               (report-station-callsign report) nil)))))
   report)
 
 (defun split-carrier-signal (signal)
@@ -737,6 +765,9 @@ A missing key leaves the previous rank in place."
            (report-station-callsign report) nil
            (report-station-kind report) nil))
     ((event-named? event "CarrierStats")
+     (remember-carrier report
+                       (gethash "Callsign" event)
+                       (gethash "Name" event))
      (note-carrier-name report
                         (gethash "Callsign" event)
                         (gethash "Name" event)))
@@ -791,9 +822,9 @@ EVENTS are JSON objects from one journal, oldest first."
     (should-be-null (report-station-callsign report))
     (should-be-null (report-body report)))
   (let ((report (report-from-events
-                 (list (parse "{\"event\":\"FSSSignalDiscovered\",\"SignalName\":\"BEYOND THE ZURARA K2T-10F\",\"SignalType\":\"FleetCarrier\"}")
-                       (parse "{\"event\":\"Docked\",\"StarSystem\":\"Heart Sector IR-V b2-0\",\"StationName\":\"K2T-10F\",\"StationType\":\"FleetCarrier\"}")
-                       (parse "{\"event\":\"FSSSignalDiscovered\",\"SignalName\":\"GLORIANA JNG-3HL\",\"SignalType\":\"FleetCarrier\"}")))))
+                 (list (parse "{\"event\":\"FSSSignalDiscovered\",\"SignalName\":\"GLORIANA JNG-3HL\",\"SignalType\":\"FleetCarrier\"}")
+                       (parse "{\"event\":\"FSSSignalDiscovered\",\"SignalName\":\"BEYOND THE ZURARA K2T-10F\",\"SignalType\":\"FleetCarrier\"}")
+                       (parse "{\"event\":\"Docked\",\"StarSystem\":\"Heart Sector IR-V b2-0\",\"StationName\":\"K2T-10F\",\"StationType\":\"FleetCarrier\"}")))))
     (should-equal "BEYOND THE ZURARA" (report-station report))
     (should-equal "K2T-10F" (report-station-callsign report))
     (should-equal "FleetCarrier" (report-station-kind report)))
@@ -801,7 +832,12 @@ EVENTS are JSON objects from one journal, oldest first."
                  (list (parse "{\"event\":\"FSSSignalDiscovered\",\"SignalName\":\"GLORIANA JNG-3HL\",\"SignalType\":\"FleetCarrier\"}")
                        (parse "{\"event\":\"Docked\",\"StationName\":\"K2T-10F\",\"StationType\":\"FleetCarrier\"}")))))
     (should-equal "K2T-10F" (report-station report))
-    (should-be-null (report-station-callsign report)))
+    (should-equal "K2T-10F" (report-station-callsign report)))
+  (let ((report (report-from-events
+                 (list (parse "{\"event\":\"FSSSignalDiscovered\",\"SignalName\":\"BEYOND THE ZURARA K2T-10F\",\"SignalType\":\"FleetCarrier\"}")
+                       (parse "{\"event\":\"Location\",\"Docked\":true,\"StationName\":\"K2T-10F\",\"StationType\":\"FleetCarrier\",\"StarSystem\":\"Heart Sector IR-V b2-0\"}")))))
+    (should-equal "BEYOND THE ZURARA" (report-station report))
+    (should-equal "K2T-10F" (report-station-callsign report)))
   (let ((report (report-from-events
                  (list (parse "{\"event\":\"CarrierStats\",\"Callsign\":\"K2T-10F\",\"Name\":\"BEYOND THE ZURARA\"}")
                        (parse "{\"event\":\"Location\",\"Docked\":true,\"StarSystem\":\"Sol\",\"StationName\":\"K2T-10F\",\"StationType\":\"FleetCarrier\"}")))))
