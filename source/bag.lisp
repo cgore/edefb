@@ -64,6 +64,11 @@ The face is the standard sans serif at 12pt roman."
 The channels are the #FF8000 hologram orange."
   (make-rgb-color 1 128/255 0))
 
+(defun report-blue ()
+  "Return the blue of an Elite Dangerous cockpit indicator.
+The channels are the #00B4FF light used beside the orange lights."
+  (make-rgb-color 0 180/255 1))
+
 (defun report-background ()
   "Return the black of a cockpit panel."
   +black+)
@@ -92,7 +97,12 @@ orange on black of a cockpit display."
   ((report
     :initarg :report
     :initform nil
-    :accessor bag-report))
+    :accessor bag-report)
+   (vehicle-view
+    :initform nil
+    :accessor bag-vehicle-view
+    :documentation "The vehicle cluster the commander chose.
+NIL follows the current situation.  :SHIP and :FOOT hold that choice."))
   (:pretty-name "EDEFB")
   (:panes
    (time (report-label "-" :min-width 200 :max-width 200))
@@ -120,7 +130,16 @@ orange on black of a cockpit display."
    (empire (report-label "-"))
    (credits (report-label "-"))
    (legal (report-label "-"))
-   (vehicle-title (report-label "Ship" :caption t))
+   (ship-light (make-pane :push-button :label "Ship"
+                         :text-style (report-text-style)
+                         :foreground (report-orange)
+                         :background (report-background)
+                         :min-width 150 :max-width 150 :height 28))
+   (foot-light (make-pane :push-button :label "On Foot"
+                          :text-style (report-text-style)
+                          :foreground (report-blue)
+                          :background (report-background)
+                          :min-width 150 :max-width 150 :height 28))
    (name-label (report-label "Ship Name" :caption t))
    (kind-label (report-label "Ship Type" :caption t))
    (ident-label (report-label "Ident" :caption t))
@@ -161,7 +180,7 @@ orange on black of a cockpit display."
                 commander combat trade explore exo mercenary cqc
                 federation empire credits legal)))
           (vertically (:spacing 8)
-            vehicle-title
+            (horizontally (:spacing 16) ship-light foot-light)
             (horizontally (:spacing 24)
               (vertically (:spacing 8)
                 name-label kind-label ident-label pad-label hull-label
@@ -412,6 +431,53 @@ near a planet, the latitude, longitude, altitude, and heading."
      "Taxi")
     (t "Ship")))
 
+(defun current-vehicle-view (report)
+  "Return the vehicle view that matches REPORT's situation.
+On foot is :FOOT.  A ship, an SRV, a taxi, and an unknown situation
+are :SHIP."
+  (if (report-on-foot? report) :foot :ship))
+
+(defun shown-vehicle-view (frame)
+  "Return the vehicle view FRAME is showing.
+A choice of :SHIP or :FOOT stays until the commander picks the other.
+NIL follows the current situation."
+  (or (bag-vehicle-view frame)
+      (current-vehicle-view (bag-report frame))))
+
+(defun choose-vehicle-view (frame view)
+  "Show VIEW on FRAME and return FRAME.
+VIEW is :SHIP or :FOOT.  The other picture remains available."
+  (setf (bag-vehicle-view frame) view)
+  (present-report frame))
+
+(defun choose-ship-view (gadget)
+  "Show the ship picture on GADGET's frame."
+  (choose-vehicle-view (gadget-client gadget) :ship))
+
+(defun choose-foot-view (gadget)
+  "Show the on-foot picture on GADGET's frame."
+  (choose-vehicle-view (gadget-client gadget) :foot))
+
+(defun attach-vehicle-lights (frame)
+  "Give FRAME's vehicle lights their callbacks."
+  (setf (gadget-activate-callback (find-pane-named frame 'ship-light))
+        #'choose-ship-view)
+  (setf (gadget-activate-callback (find-pane-named frame 'foot-light))
+        #'choose-foot-view)
+  frame)
+
+(defun set-light (frame name lit foreground)
+  "Set the light NAME of FRAME to its lit or dark colors.
+LIT true is the bright cockpit color.  A dark light keeps the same
+foreground and uses a dim background, so the choice is still visible."
+  (let ((pane (find-pane-named frame name)))
+    (setf (gadget-foreground pane) foreground
+          (gadget-background pane)
+          (if lit
+              (report-background)
+              (make-rgb-color 0.15 0.15 0.15))))
+  frame)
+
 (defun ship-lines (report)
   "Return the ship cluster lines for REPORT."
   (list (cons "Ship Name" (and report (report-name report)))
@@ -455,11 +521,15 @@ near a planet, the latitude, longitude, altitude, and heading."
   "Return the taxi cluster lines."
   (cons (cons "Vehicle" "Taxi") (blank-lines 10)))
 
-(defun vehicle-lines (report)
-  "Return the eleven lines of the vehicle cluster for REPORT.
-A ship, an SRV, a taxi, and being on foot each use that same column."
+(defun vehicle-lines (report view)
+  "Return the eleven lines of VIEW for REPORT.
+VIEW :FOOT uses the suit.  VIEW :SHIP uses the ship, an SRV, or a taxi.
+The picture is the remembered one when it is not the current vehicle."
   (cond
-    ((report-on-foot? report) (foot-lines report))
+    ((eq view :foot)
+     (foot-lines (if (report-on-foot? report)
+                     report
+                     (and report (report-remembered-foot report)))))
     ((and report
           (stringp (report-situation report))
           (string-equal (report-situation report) "SRV"))
@@ -468,7 +538,10 @@ A ship, an SRV, a taxi, and being on foot each use that same column."
           (stringp (report-situation report))
           (string-equal (report-situation report) "Taxi"))
      (taxi-lines))
-    (t (ship-lines report))))
+    (t
+     (ship-lines (if (report-in-ship? report)
+                     report
+                     (and report (report-remembered-ship report)))))))
 
 (defparameter *vehicle-rows*
   '((name . name-label)
@@ -504,8 +577,10 @@ BLANK true leaves an unused row empty.  An unknown value is a dash."
 (defun present-report (frame)
   "Put FRAME's report on its labels.
 The top row is the game clock and the position.  The left cluster is
-the commander.  The next cluster is the ship, or the suit when the
-commander is on foot.  An empty value is shown as a dash."
+the commander.  The next cluster has a Ship light and an On Foot
+light.  The bright light is the picture being shown, and a star marks
+the current situation.  Either light shows that picture.  An empty
+value is shown as a dash."
   (let ((report (bag-report frame)))
     (set-report-label frame 'position (position-text report))
     (set-report-label frame 'time
@@ -528,9 +603,18 @@ commander is on foot.  An empty value is shown as a dash."
                                    (and report (report-balance report)))))
     (set-report-label frame 'legal
                       (shown-text (and report (legal-text (report-legal report)))))
-    (set-report-label frame 'vehicle-title (vehicle-heading report))
+    (let ((view (shown-vehicle-view frame))
+          (current (current-vehicle-view report)))
+      (set-light frame 'ship-light (eq view :ship) (report-orange))
+      (set-light frame 'foot-light (eq view :foot) (report-blue))
+      (set-report-label frame 'ship-light
+                        (if (eq current :ship)
+                            (format nil "* ~A" (vehicle-heading report))
+                            "Ship"))
+      (set-report-label frame 'foot-light
+                        (if (eq current :foot) "* On Foot" "On Foot")))
     (loop for (value-pane . caption-pane) in *vehicle-rows*
-          for line in (vehicle-lines report)
+          for line in (vehicle-lines report (shown-vehicle-view frame))
           do (present-line frame value-pane caption-pane
                            (car line) (cdr line)
                            (and (null (car line)) (null (cdr line))))))
@@ -600,8 +684,10 @@ commander is on foot.  An empty value is shown as a dash."
     (should-be-null (find-pane-named frame 'position-label :errorp nil))
     (should-equal "3312-10-21  01:15:10"
                   (gadget-label (find-pane-named frame 'time)))
-    (should-equal "Ship"
-                  (gadget-label (find-pane-named frame 'vehicle-title)))
+    (should-equal "* Ship"
+                  (gadget-label (find-pane-named frame 'ship-light)))
+    (should-equal "On Foot"
+                  (gadget-label (find-pane-named frame 'foot-light)))
     (should-equal "Ship Name"
                   (gadget-label (find-pane-named frame 'name-label)))
     (should-equal "Kipling's Ghost"
@@ -644,8 +730,10 @@ commander is on foot.  An empty value is shown as a dash."
                                      :heading 12
                                      :system "Sol"))))
     (present-report frame)
-    (should-equal "On Foot"
-                  (gadget-label (find-pane-named frame 'vehicle-title)))
+    (should-equal "* On Foot"
+                  (gadget-label (find-pane-named frame 'foot-light)))
+    (should-equal "Ship"
+                  (gadget-label (find-pane-named frame 'ship-light)))
     (should-equal "Suit"
                   (gadget-label (find-pane-named frame 'name-label)))
     (should-equal "Artemis Suit"
@@ -676,8 +764,8 @@ commander is on foot.  An empty value is shown as a dash."
                 'bag-frame
                 :report (make-report :situation "SRV" :shields :down))))
     (present-report frame)
-    (should-equal "SRV"
-                  (gadget-label (find-pane-named frame 'vehicle-title)))
+    (should-equal "* SRV"
+                  (gadget-label (find-pane-named frame 'ship-light)))
     (should-equal "Vehicle"
                   (gadget-label (find-pane-named frame 'name-label)))
     (should-equal "SRV"
@@ -688,8 +776,8 @@ commander is on foot.  An empty value is shown as a dash."
                 'bag-frame
                 :report (make-report :name "X" :type "Not A Ship"))))
     (present-report frame)
-    (should-equal "Ship"
-                  (gadget-label (find-pane-named frame 'vehicle-title)))
+    (should-equal "* Ship"
+                  (gadget-label (find-pane-named frame 'ship-light)))
     (should-equal "Not A Ship"
                   (gadget-label (find-pane-named frame 'kind)))
     (should-equal "-" (gadget-label (find-pane-named frame 'pad)))
@@ -710,7 +798,29 @@ commander is on foot.  An empty value is shown as a dash."
     (present-report frame)
     (should-equal "-" (gadget-label (find-pane-named frame 'name)))
     (should-equal "-" (gadget-label (find-pane-named frame 'commander)))
-    (should-equal "-" (gadget-label (find-pane-named frame 'time)))))
+    (should-equal "-" (gadget-label (find-pane-named frame 'time))))
+  (let ((frame (make-application-frame
+                'bag-frame
+                :report (make-report :situation "Docked"
+                                     :name "Kipling's Ghost"
+                                     :type "Mandalay"
+                                     :suit "Artemis Suit"
+                                     :health 1/2))))
+    (present-report frame)
+    (setf (report-remembered-foot (bag-report frame))
+          (make-report :suit "Artemis Suit" :health 1/2))
+    (choose-vehicle-view frame :foot)
+    (should-equal "Suit"
+                  (gadget-label (find-pane-named frame 'name-label)))
+    (should-equal "Artemis Suit"
+                  (gadget-label (find-pane-named frame 'name)))
+    (should-equal "* Ship"
+                  (gadget-label (find-pane-named frame 'ship-light)))
+    (choose-vehicle-view frame :ship)
+    (should-equal "Ship Name"
+                  (gadget-label (find-pane-named frame 'name-label)))
+    (should-equal "Kipling's Ghost"
+                  (gadget-label (find-pane-named frame 'name)))))
 
 (defun update-report (frame directory)
   "Read DIRECTORY and put that report on FRAME."
@@ -728,13 +838,13 @@ commander is on foot.  An empty value is shown as a dash."
 The top row is the game date and time, then the current position.
 The left cluster is the commander: name, ranks, legal state, and
 credits.
-The next cluster is the ship when the commander is in one, including
-the hull, shields, power distribution, fuel, and cargo.  On foot, that
-cluster switches to the suit.  Labels use the standard sans serif,
+The next cluster has a Ship light and an On Foot light.  The bright
+light is the picture being shown, and either light shows that picture.
+Labels use the standard sans serif,
 in the orange on black of a cockpit display, inside an orange rule.
 The files are read again every second until the window closes.
 Returns the frame."
-  (let* ((frame (make-application-frame 'bag-frame))
+  (let* ((frame (attach-vehicle-lights (make-application-frame 'bag-frame)))
          (manager (make-frame-manager))
          (timer (sb-ext:make-timer
                  (lambda ()

@@ -71,6 +71,8 @@
            :report-pips
            :report-rank
            :report-rebuy
+           :report-remembered-foot
+           :report-remembered-ship
            :report-shields
            :report-situation
            :report-station
@@ -124,7 +126,9 @@ last Loadout or HullDamage.  SHIELDS is :UP or :DOWN.  PIPS is the
 SYS, ENG, and WEP distribution in half-pips.  JUMP-RANGE is light
 years.  REBUY is credits.  LEGAL is the legal state.  TIMESTAMP is
 the UTC time the game wrote.  CARRIERS are callsigns and given names
-seen in this journal.  SUIT, HEALTH, OXYGEN, GRAVITY,
+seen in this journal.  REMEMBERED-SHIP and REMEMBERED-FOOT are the
+last ship and on-foot pictures, so either can be shown while the
+other is current.  SUIT, HEALTH, OXYGEN, GRAVITY,
 TEMPERATURE, and WEAPON describe the commander on foot.  BREATHABLE
 is :YES or :NO."
   name
@@ -156,6 +160,8 @@ is :YES or :NO."
   legal
   timestamp
   carriers
+  remembered-ship
+  remembered-foot
   suit
   health
   oxygen
@@ -1073,11 +1079,72 @@ not docked clears a station the journal still names."
     (should-equal "Galileo" (report-station report))
     (should-equal "Sol" (report-system report))))
 
+(defun ship-memory (report)
+  "Return the ship facts of REPORT, without the live cockpit fields."
+  (make-report :name (report-name report)
+               :type (report-type report)
+               :ident (report-ident report)
+               :fuel-main (report-fuel-main report)
+               :fuel-capacity (report-fuel-capacity report)
+               :cargo (report-cargo report)
+               :cargo-capacity (report-cargo-capacity report)
+               :hull (report-hull report)
+               :shields (report-shields report)
+               :pips (report-pips report)
+               :jump-range (report-jump-range report)
+               :rebuy (report-rebuy report)))
+
+(defun foot-memory (report)
+  "Return the on-foot facts of REPORT."
+  (make-report :suit (report-suit report)
+               :health (report-health report)
+               :oxygen (report-oxygen report)
+               :gravity (report-gravity report)
+               :temperature (report-temperature report)
+               :weapon (report-weapon report)
+               :breathable (report-breathable report)))
+
+(defun remember-vehicles (report)
+  "Keep REPORT's current ship or on-foot picture for the other view.
+A ship, a fighter, and multicrew update the ship picture.  Being on
+foot updates the suit picture.  An SRV and a taxi update neither."
+  (cond
+    ((report-on-foot? report)
+     (setf (report-remembered-foot report) (foot-memory report)))
+    ((report-in-ship? report)
+     (setf (report-remembered-ship report) (ship-memory report))))
+  report)
+
+(behavior 'remember-vehicles
+  (let ((report (make-report :situation "Docked" :name "Kipling's Ghost"
+                             :type "Mandalay" :ident "KG-07" :hull 1
+                             :suit "Artemis Suit" :health 1/2)))
+    (remember-vehicles report)
+    (should-equal "Kipling's Ghost" (report-name (report-remembered-ship report)))
+    (should-equal "Mandalay" (report-type (report-remembered-ship report)))
+    (should= 1 (report-hull (report-remembered-ship report)))
+    (should-be-null (report-suit (report-remembered-ship report)))
+    (should-be-null (report-remembered-foot report)))
+  (let ((report (make-report :situation "On foot" :name "Parked"
+                             :suit "Artemis Suit" :health 1/2 :oxygen 1
+                             :gravity 0.12 :temperature 290
+                             :weapon "Karma P-15" :breathable :yes)))
+    (remember-vehicles report)
+    (should-equal "Artemis Suit" (report-suit (report-remembered-foot report)))
+    (should= 290 (report-temperature (report-remembered-foot report)))
+    (should-be-null (report-name (report-remembered-foot report)))
+    (should-be-null (report-remembered-ship report)))
+  (let ((report (make-report :situation "SRV" :name "Parked")))
+    (remember-vehicles report)
+    (should-be-null (report-remembered-ship report))
+    (should-be-null (report-remembered-foot report))))
+
 (defun read-report (directory)
   "Return the live report for the newest journal and Status.json in
 DIRECTORY."
-  (apply-status (report-from-events (journal-events directory))
-                (read-status directory)))
+  (remember-vehicles
+   (apply-status (report-from-events (journal-events directory))
+                 (read-status directory))))
 
 (behavior 'read-ship
   (let ((directory (merge-pathnames
