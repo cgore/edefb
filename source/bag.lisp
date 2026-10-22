@@ -149,8 +149,8 @@ orange on black of a cockpit display."
       (vertically (:spacing 12)
         (horizontally (:spacing 24)
           time position)
-        (horizontally (:spacing 32)
-          (vertically (:spacing 8)
+        (horizontally (:spacing 32 :max-height 436)
+          (vertically (:spacing 8 :max-height 436)
             cmdr-title
             (horizontally (:spacing 24)
               (vertically (:spacing 8)
