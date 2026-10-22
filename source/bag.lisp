@@ -66,8 +66,8 @@ The channels are the #FF8000 hologram orange."
 
 (defun report-blue ()
   "Return the blue of an Elite Dangerous cockpit indicator.
-The channels are the #00B4FF light used beside the orange lights."
-  (make-rgb-color 0 180/255 1))
+The channels are the #31C8FF light beside the orange lights."
+  (make-rgb-color 49/255 200/255 1))
 
 (defun report-background ()
   "Return the black of a cockpit panel."
@@ -467,12 +467,18 @@ VIEW is :SHIP or :FOOT.  The other picture remains available."
           (gadget-activate-callback foot) #'choose-foot-view))
   frame)
 
+(defun dim-color (color)
+  "Return COLOR at about one quarter strength.
+A dark cockpit indicator keeps its own color rather than turning gray."
+  (multiple-value-bind (red green blue) (color-rgb color)
+    (make-rgb-color (* red 0.25) (* green 0.25) (* blue 0.25))))
+
 (defun set-light (frame name lit color)
   "Set the square light NAME of FRAME to its lit or dark color.
-LIT true fills the square with COLOR.  A dark light is a dim square
-of the same color, so an unselected picture is still visible."
+LIT true fills the square with COLOR.  A dark light is the same color
+dimmed, as an inactive cockpit indicator is."
   (let ((pane (find-pane-named frame name))
-        (ink (if lit color (make-rgb-color 0.12 0.12 0.12))))
+        (ink (if lit color (dim-color color))))
     (setf (gadget-foreground pane) ink
           (gadget-background pane) ink))
   frame)
