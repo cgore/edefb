@@ -270,9 +270,27 @@ The journal stores each in half-pips, from 0 to 8."
     (format nil "~,2F G" gravity)))
 
 (defun temperature-text (temperature)
-  "Return TEMPERATURE in kelvin."
+  "Return TEMPERATURE in kelvin, Rankine, Fahrenheit, and Celsius.
+TEMPERATURE is kelvin.  Rankine, Fahrenheit, and Celsius use the
+degree symbol."
   (when (numberp temperature)
-    (format nil "~D K" (round temperature))))
+    (format nil "~D K / ~D~C R / ~D~C F / ~D~C C"
+            (round temperature)
+            (round (* temperature 9/5))
+            #\DEGREE_SIGN
+            (round (- (* temperature 9/5) 459.67))
+            #\DEGREE_SIGN
+            (round (- temperature 273.15))
+            #\DEGREE_SIGN)))
+
+(behavior 'temperature-text
+  (should-equal (format nil "290 K / 522~C R / 62~C F / 17~C C"
+                        #\DEGREE_SIGN #\DEGREE_SIGN #\DEGREE_SIGN)
+                (temperature-text 290))
+  (should-equal (format nil "0 K / 0~C R / -460~C F / -273~C C"
+                        #\DEGREE_SIGN #\DEGREE_SIGN #\DEGREE_SIGN)
+                (temperature-text 0))
+  (should-be-null (temperature-text nil)))
 
 (defun air-text (breathable)
   "Return whether the air is breathable."
@@ -640,7 +658,8 @@ commander is on foot.  An empty value is shown as a dash."
                   (gadget-label (find-pane-named frame 'ident)))
     (should-equal "0.12 G"
                   (gadget-label (find-pane-named frame 'pad)))
-    (should-equal "290 K"
+    (should-equal (format nil "290 K / 522~C R / 62~C F / 17~C C"
+                          #\DEGREE_SIGN #\DEGREE_SIGN #\DEGREE_SIGN)
                   (gadget-label (find-pane-named frame 'hull)))
     (should-equal "Karma P-15"
                   (gadget-label (find-pane-named frame 'shields)))
