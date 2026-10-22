@@ -4,9 +4,10 @@ EDEFB is the Elite Dangerous Electronic Flight Bag.  It is a Common Lisp
 companion for the game.  It reads the live player journal and the snapshot
 files written beside it, and keeps the picture of the ship you are flying.
 
-The window is a live report.  Along the top are the current position
-and the game date and time.  The left cluster is the commander: the
-name, the ranks, the legal state, and the credits.  The next cluster
+The window is a live report.  Along the top are the game date and
+time, then the current position.  A fleet carrier is shown as its
+callsign and the name the journal wrote.  The left cluster is the
+commander: the name, the ranks, the legal state, and the credits.  The next cluster
 is the ship when the commander is aboard, including the hull, whether
 the shields are up, the power distribution, the fuel, and the cargo
 used, free, and total.  On foot, that cluster switches to the suit.

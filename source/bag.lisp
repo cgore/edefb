@@ -94,10 +94,8 @@ orange on black of a cockpit display."
     :accessor bag-report))
   (:pretty-name "EDEFB")
   (:panes
-   (position-label (report-label "Position" :caption t))
+   (time (report-label "-" :min-width 200 :max-width 200))
    (position (report-label "-" :min-width 640))
-   (time-label (report-label "Time" :caption t))
-   (time (report-label "-" :min-width 240 :max-width 260))
    (cmdr-title (report-label "CMDR" :caption t))
    (commander-label (report-label "Name" :caption t))
    (combat-label (report-label "Combat" :caption t))
@@ -149,7 +147,7 @@ orange on black of a cockpit display."
     (outlining (:thickness 8 :ink (report-orange))
       (vertically (:spacing 12)
         (horizontally (:spacing 24)
-          position-label position time-label time)
+          time position)
         (horizontally (:spacing 32)
           (vertically (:spacing 8)
             cmdr-title
@@ -325,6 +323,29 @@ The journal writes UTC.  The game calendar is that civil date with
   (when (and (stringp text) (plusp (length text)))
     text))
 
+(defun station-text (report)
+  "Return REPORT's station as it should be shown.
+A fleet carrier is its callsign and its given name, in the spelling
+the journal wrote.  Another station is its name."
+  (let ((station (and report (report-station report)))
+        (callsign (and report (report-station-callsign report))))
+    (if (and (position-part station) (position-part callsign))
+        (format nil "~A ~A" callsign station)
+        station)))
+
+(behavior 'station-text
+  (should-equal "K2T-10F BEYOND THE ZURARA"
+                (station-text
+                 (make-report :station "BEYOND THE ZURARA"
+                              :station-callsign "K2T-10F"
+                              :station-kind "FleetCarrier")))
+  (should-equal "[VANG] CAUSTIC-Crusade"
+                (station-text
+                 (make-report :station "[VANG] CAUSTIC-Crusade")))
+  (should-equal "Galileo"
+                (station-text (make-report :station "Galileo")))
+  (should-be-null (station-text nil)))
+
 (defun position-text (report)
   "Return REPORT's place on one line.
 The parts are the system, body, station, state, destination, and,
@@ -337,7 +358,7 @@ near a planet, the latitude, longitude, altitude, and heading."
                    (push text parts))))
           (add (report-system report))
           (add (report-body report))
-          (add (report-station report))
+          (add (station-text report))
           (add (report-situation report))
           (when (position-part (report-destination report))
             (add (format nil "TO ~A" (report-destination report))))
@@ -463,7 +484,7 @@ BLANK true leaves an unused row empty.  An unknown value is a dash."
 
 (defun present-report (frame)
   "Put FRAME's report on its labels.
-The top row is the position and the game clock.  The left cluster is
+The top row is the game clock and the position.  The left cluster is
 the commander.  The next cluster is the ship, or the suit when the
 commander is on foot.  An empty value is shown as a dash."
   (let ((report (bag-report frame)))
@@ -556,6 +577,8 @@ commander is on foot.  An empty value is shown as a dash."
     (should-equal
      "Sol  /  Earth  /  Galileo  /  Docked  /  TO Hutton Orbital"
      (gadget-label (find-pane-named frame 'position)))
+    (should-be-null (find-pane-named frame 'time-label :errorp nil))
+    (should-be-null (find-pane-named frame 'position-label :errorp nil))
     (should-equal "3312-10-21  01:15:10"
                   (gadget-label (find-pane-named frame 'time)))
     (should-equal "Ship"
@@ -651,6 +674,18 @@ commander is on foot.  An empty value is shown as a dash."
                   (gadget-label (find-pane-named frame 'kind)))
     (should-equal "-" (gadget-label (find-pane-named frame 'pad)))
     (should-equal "-" (gadget-label (find-pane-named frame 'position))))
+  (let ((frame (make-application-frame
+                'bag-frame
+                :report (make-report
+                         :system "Heart Sector IR-V b2-0"
+                         :station "BEYOND THE ZURARA"
+                         :station-callsign "K2T-10F"
+                         :station-kind "FleetCarrier"
+                         :situation "Docked"))))
+    (present-report frame)
+    (should-equal
+     "Heart Sector IR-V b2-0  /  K2T-10F BEYOND THE ZURARA  /  Docked"
+     (gadget-label (find-pane-named frame 'position))))
   (let ((frame (make-application-frame 'bag-frame)))
     (present-report frame)
     (should-equal "-" (gadget-label (find-pane-named frame 'name)))
@@ -670,8 +705,9 @@ commander is on foot.  An empty value is shown as a dash."
 
 (defun show-ship (&optional (directory (saved-games-directory)))
   "Open the live report for DIRECTORY and run its command loop.
-The top row is the current position and the game date and time.  The
-left cluster is the commander: name, ranks, legal state, and credits.
+The top row is the game date and time, then the current position.
+The left cluster is the commander: name, ranks, legal state, and
+credits.
 The next cluster is the ship when the commander is in one, including
 the hull, shields, power distribution, fuel, and cargo.  On foot, that
 cluster switches to the suit.  Labels use the standard sans serif,

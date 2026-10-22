@@ -74,6 +74,8 @@
            :report-shields
            :report-situation
            :report-station
+           :report-station-callsign
+           :report-station-kind
            :report-suit
            :report-system
            :report-temperature
@@ -110,7 +112,9 @@ EMPIRE are the naval ladders."
 (defstruct report
   "A live picture of the commander and the current vehicle.
 NAME, TYPE, and IDENT name the ship.  SYSTEM, STATION, and BODY say
-where the commander is.  SITUATION is the cockpit state, such as
+where the commander is.  STATION-KIND is the journal station type,
+such as FleetCarrier.  STATION-CALLSIGN is a carrier's callsign when
+STATION is its given name.  SITUATION is the cockpit state, such as
 Docked or Supercruise.  LATITUDE, LONGITUDE, HEADING, and ALTITUDE
 are set near a planet.  FUEL-MAIN and FUEL-CAPACITY are tons.  CARGO
 and CARGO-CAPACITY are tons.  BALANCE is credits.  DESTINATION is the
@@ -126,6 +130,8 @@ is :YES or :NO."
   type
   system
   station
+  station-kind
+  station-callsign
   body
   situation
   fuel-main
@@ -424,6 +430,98 @@ EVENTS are JSON objects from one journal, oldest first."
   (when (and (stringp value) (plusp (length value)))
     value))
 
+(defparameter +carrier-callsign-length+ 7
+  "The length of a fleet carrier callsign, such as K2T-10F.")
+
+(defun carrier-callsign? (text)
+  "Return true when TEXT is a fleet carrier callsign.
+A callsign is three characters, a hyphen, and three characters."
+  (and (stringp text)
+       (= (length text) +carrier-callsign-length+)
+       (char= #\- (char text 3))))
+
+(behavior 'carrier-callsign?
+  (should-be-true (carrier-callsign? "K2T-10F"))
+  (should-be-false (carrier-callsign? "Galileo"))
+  (should-be-false (carrier-callsign? "K2T-10"))
+  (should-be-false (carrier-callsign? nil)))
+
+(defun note-carrier-name (report callsign name)
+  "Remember CALLSIGN and NAME as REPORT's current carrier.
+The spelling is the spelling the journal wrote.  A later event for
+another callsign replaces both."
+  (let ((callsign (text-value callsign))
+        (name (text-value name)))
+    (when (and (carrier-callsign? callsign) name)
+      (setf (report-station-callsign report) callsign
+            (report-station report) name)))
+  report)
+
+(defun note-carrier-signal (report signal)
+  "Copy a fleet carrier SIGNAL onto REPORT when it names the station.
+A signal for another carrier is a contact, not the current station.
+The spelling is left as the journal wrote it."
+  (multiple-value-bind (callsign name) (split-carrier-signal signal)
+    (when (and callsign
+               (or (null (report-station report))
+                   (string-equal callsign (report-station report))
+                   (string-equal callsign (report-station-callsign report))))
+      (note-carrier-name report callsign name)))
+  report)
+
+(defun note-station (report name kind)
+  "Copy station NAME and KIND onto REPORT.
+A carrier whose given name is already known keeps that name and
+records NAME as its callsign.  Other stations use NAME as written."
+  (let ((name (text-value name))
+        (kind (text-value kind)))
+    (when kind
+      (setf (report-station-kind report) kind))
+    (when name
+      (if (and (string-equal kind "FleetCarrier")
+               (carrier-callsign? name)
+               (string-equal name (report-station-callsign report))
+               (text-value (report-station report)))
+          (setf (report-station-callsign report) name)
+          (setf (report-station report) name
+                (report-station-callsign report) nil))))
+  report)
+
+(defun split-carrier-signal (signal)
+  "Return the callsign and given name in a fleet carrier SIGNAL.
+The journal writes the given name, a space, and the callsign.  A
+signal that does not end in a callsign has no pair.  The spelling is
+left as the journal wrote it."
+  (when (and (stringp signal)
+             (> (length signal) +carrier-callsign-length+)
+             (char= #\Space (char signal (- (length signal)
+                                            +carrier-callsign-length+
+                                            1))))
+    (let ((callsign (subseq signal (- (length signal)
+                                      +carrier-callsign-length+))))
+      (when (carrier-callsign? callsign)
+        (values callsign
+                (subseq signal 0 (- (length signal)
+                                    +carrier-callsign-length+
+                                    1)))))))
+
+(behavior 'split-carrier-signal
+  (multiple-value-bind (callsign name)
+      (split-carrier-signal "BEYOND THE ZURARA K2T-10F")
+    (should-equal "K2T-10F" callsign)
+    (should-equal "BEYOND THE ZURARA" name))
+  (multiple-value-bind (callsign name)
+      (split-carrier-signal "[VANG] CAUSTIC-Crusade XZT-21L")
+    (should-equal "XZT-21L" callsign)
+    (should-equal "[VANG] CAUSTIC-Crusade" name))
+  (multiple-value-bind (callsign name)
+      (split-carrier-signal "GLORIANA JNG-3HL")
+    (should-equal "JNG-3HL" callsign)
+    (should-equal "GLORIANA" name))
+  (should-be-null (split-carrier-signal "Farsight Expedition Base"))
+  (should-be-null (split-carrier-signal "K2T-10F"))
+  (should-be-null (split-carrier-signal nil)))
+
 (defun status-flag? (flags bit)
   "Return true when bit BIT of FLAGS is set."
   (and (integerp flags) (logbitp bit flags)))
@@ -603,21 +701,48 @@ A missing key leaves the previous rank in place."
            (assign-text (report-system report) (gethash "StarSystem" event))
            (report-body report)
            (text-value (gethash "Body" event)))
-     (setf (report-station report)
-           (when (eq t (gethash "Docked" event))
-             (text-value (gethash "StationName" event)))))
-    ((event-one-of? event '("FSDJump" "CarrierJump"))
+     (if (eq t (gethash "Docked" event))
+         (note-station report
+                       (gethash "StationName" event)
+                       (gethash "StationType" event))
+         (setf (report-station report) nil
+               (report-station-callsign report) nil
+               (report-station-kind report) nil)))
+    ((event-named? event "FSDJump")
      (setf (report-system report)
            (assign-text (report-system report) (gethash "StarSystem" event))
            (report-station report) nil
+           (report-station-callsign report) nil
+           (report-station-kind report) nil
            (report-body report) nil))
-    ((event-named? event "Docked")
+    ((event-named? event "CarrierJump")
      (setf (report-system report)
            (assign-text (report-system report) (gethash "StarSystem" event))
-           (report-station report)
-           (text-value (gethash "StationName" event))))
+           (report-body report) nil)
+     (if (eq t (gethash "Docked" event))
+         (note-station report
+                       (gethash "StationName" event)
+                       (gethash "StationType" event))
+         (setf (report-station report) nil
+               (report-station-callsign report) nil
+               (report-station-kind report) nil)))
+    ((event-named? event "Docked")
+     (setf (report-system report)
+           (assign-text (report-system report) (gethash "StarSystem" event)))
+     (note-station report
+                   (gethash "StationName" event)
+                   (gethash "StationType" event)))
     ((event-named? event "Undocked")
-     (setf (report-station report) nil))
+     (setf (report-station report) nil
+           (report-station-callsign report) nil
+           (report-station-kind report) nil))
+    ((event-named? event "CarrierStats")
+     (note-carrier-name report
+                        (gethash "Callsign" event)
+                        (gethash "Name" event)))
+    ((and (event-named? event "FSSSignalDiscovered")
+          (string-equal (gethash "SignalType" event) "FleetCarrier"))
+     (note-carrier-signal report (gethash "SignalName" event)))
     ((event-one-of? event '("ApproachBody" "SupercruiseExit" "Touchdown"))
      (setf (report-body report)
            (assign-text (report-body report) (gethash "Body" event))))
@@ -663,7 +788,32 @@ EVENTS are JSON objects from one journal, oldest first."
     (should= 32 (report-fuel-capacity report))
     (should-equal "Alpha Centauri" (report-system report))
     (should-equal "Hutton Orbital" (report-station report))
-    (should-be-null (report-body report))))
+    (should-be-null (report-station-callsign report))
+    (should-be-null (report-body report)))
+  (let ((report (report-from-events
+                 (list (parse "{\"event\":\"FSSSignalDiscovered\",\"SignalName\":\"BEYOND THE ZURARA K2T-10F\",\"SignalType\":\"FleetCarrier\"}")
+                       (parse "{\"event\":\"Docked\",\"StarSystem\":\"Heart Sector IR-V b2-0\",\"StationName\":\"K2T-10F\",\"StationType\":\"FleetCarrier\"}")
+                       (parse "{\"event\":\"FSSSignalDiscovered\",\"SignalName\":\"GLORIANA JNG-3HL\",\"SignalType\":\"FleetCarrier\"}")))))
+    (should-equal "BEYOND THE ZURARA" (report-station report))
+    (should-equal "K2T-10F" (report-station-callsign report))
+    (should-equal "FleetCarrier" (report-station-kind report)))
+  (let ((report (report-from-events
+                 (list (parse "{\"event\":\"FSSSignalDiscovered\",\"SignalName\":\"GLORIANA JNG-3HL\",\"SignalType\":\"FleetCarrier\"}")
+                       (parse "{\"event\":\"Docked\",\"StationName\":\"K2T-10F\",\"StationType\":\"FleetCarrier\"}")))))
+    (should-equal "K2T-10F" (report-station report))
+    (should-be-null (report-station-callsign report)))
+  (let ((report (report-from-events
+                 (list (parse "{\"event\":\"CarrierStats\",\"Callsign\":\"K2T-10F\",\"Name\":\"BEYOND THE ZURARA\"}")
+                       (parse "{\"event\":\"Location\",\"Docked\":true,\"StarSystem\":\"Sol\",\"StationName\":\"K2T-10F\",\"StationType\":\"FleetCarrier\"}")))))
+    (should-equal "BEYOND THE ZURARA" (report-station report))
+    (should-equal "K2T-10F" (report-station-callsign report)))
+  (let ((report (report-from-events
+                 (list (parse "{\"event\":\"Docked\",\"StationName\":\"K2T-10F\",\"StationType\":\"FleetCarrier\"}")
+                       (parse "{\"event\":\"Undocked\",\"StationName\":\"K2T-10F\"}")
+                       (parse "{\"event\":\"FSDJump\",\"StarSystem\":\"Sol\"}")))))
+    (should-be-null (report-station report))
+    (should-be-null (report-station-callsign report))
+    (should-be-null (report-station-kind report))))
 
 (behavior 'report-commander
   (let ((report (report-from-events
@@ -795,7 +945,9 @@ not docked clears a station the journal still names."
         (setf (report-balance report) (gethash "Balance" status)))
       (setf (report-body report) (text-value (gethash "BodyName" status)))
       (when (and (integerp flags) (not (docked-like? flags flags2)))
-        (setf (report-station report) nil))
+        (setf (report-station report) nil
+              (report-station-callsign report) nil
+              (report-station-kind report) nil))
       (setf (report-situation report) (situation-from-flags flags flags2))
       (setf (report-destination report)
             (when (hash-table-p destination)
