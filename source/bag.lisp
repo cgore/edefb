@@ -130,14 +130,22 @@ NIL follows the current situation.  :SHIP and :FOOT hold that choice."))
    (empire (report-label "-"))
    (credits (report-label "-"))
    (legal (report-label "-"))
-   (ship-light (make-pane :push-button :label ""
-                         :min-width 22 :max-width 22
-                         :min-height 22 :max-height 22 :height 22))
-   (ship-caption (report-label "Ship" :caption t))
-   (foot-light (make-pane :push-button :label ""
-                          :min-width 22 :max-width 22
-                          :min-height 22 :max-height 22 :height 22))
-   (foot-caption (report-label "On Foot" :caption t))
+   (ship-light (make-pane :label :label ""
+                          :min-width 18 :max-width 18
+                          :min-height 18 :max-height 18 :height 18))
+   (ship-caption (make-pane :push-button :label "Ship"
+                            :text-style (report-text-style)
+                            :foreground (report-orange)
+                            :background (report-background)
+                            :min-width 150 :max-width 150 :height 28))
+   (foot-light (make-pane :label :label ""
+                          :min-width 18 :max-width 18
+                          :min-height 18 :max-height 18 :height 18))
+   (foot-caption (make-pane :push-button :label "On Foot"
+                            :text-style (report-text-style)
+                            :foreground (report-blue)
+                            :background (report-background)
+                            :min-width 150 :max-width 150 :height 28))
    (name-label (report-label "Ship Name" :caption t))
    (kind-label (report-label "Ship Type" :caption t))
    (ident-label (report-label "Ident" :caption t))
@@ -458,9 +466,10 @@ VIEW is :SHIP or :FOOT.  The other picture remains available."
   (choose-vehicle-view (gadget-client gadget) :foot))
 
 (defun attach-vehicle-lights (frame)
-  "Give FRAME's vehicle lights their callbacks."
-  (let ((ship (find-pane-named frame 'ship-light))
-        (foot (find-pane-named frame 'foot-light)))
+  "Give FRAME's vehicle buttons their callbacks.
+The square beside each button is an indicator, not the control."
+  (let ((ship (find-pane-named frame 'ship-caption))
+        (foot (find-pane-named frame 'foot-caption)))
     (setf (gadget-client ship) frame
           (gadget-client foot) frame
           (gadget-activate-callback ship) #'choose-ship-view
@@ -474,13 +483,24 @@ A dark cockpit indicator keeps its own color rather than turning gray."
     (make-rgb-color (* red 0.25) (* green 0.25) (* blue 0.25))))
 
 (defun set-light (frame name lit color)
-  "Set the square light NAME of FRAME to its lit or dark color.
-LIT true fills the square with COLOR.  A dark light is the same color
-dimmed, as an inactive cockpit indicator is."
+  "Set the square indicator NAME of FRAME to its lit or dark color.
+LIT true fills the square with COLOR.  A dark indicator is the same
+color dimmed, as an inactive cockpit light is."
   (let ((pane (find-pane-named frame name))
         (ink (if lit color (dim-color color))))
     (setf (gadget-foreground pane) ink
           (gadget-background pane) ink))
+  frame)
+
+(defun set-cockpit-button (frame name selected color)
+  "Set the cockpit button NAME of FRAME.
+SELECTED true is the picture being shown.  Its face is a dim rectangle
+of COLOR, and its text is black.  The other button has black text on
+the panel, in the same color."
+  (let ((pane (find-pane-named frame name)))
+    (setf (gadget-foreground pane) (if selected +black+ color)
+          (gadget-background pane)
+          (if selected (dim-color color) (report-background))))
   frame)
 
 (defun ship-lines (report)
@@ -610,8 +630,10 @@ value is shown as a dash."
                       (shown-text (and report (legal-text (report-legal report)))))
     (let ((view (shown-vehicle-view frame))
           (current (current-vehicle-view report)))
-      (set-light frame 'ship-light (eq view :ship) (report-orange))
-      (set-light frame 'foot-light (eq view :foot) (report-blue))
+      (set-light frame 'ship-light (eq current :ship) (report-orange))
+      (set-light frame 'foot-light (eq current :foot) (report-blue))
+      (set-cockpit-button frame 'ship-caption (eq view :ship) (report-orange))
+      (set-cockpit-button frame 'foot-caption (eq view :foot) (report-blue))
       (set-report-label frame 'ship-caption
                         (if (eq current :ship)
                             (vehicle-heading report)
